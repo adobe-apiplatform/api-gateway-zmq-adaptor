@@ -12,6 +12,6 @@ TBD
 ### Usages
 * Performant logging mechanism
 * Report usage and tracking
-* 
+ 
 ## Building
 TBD

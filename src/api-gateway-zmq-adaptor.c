@@ -2,10 +2,13 @@
 //  This shows how to capture data using a pub-sub proxy
 
 #include "czmq.h"
+#include "time.h"
 
-#define DEFAULT_XPUB "tcp://127.0.0.1:6001"
+// #define DEFAULT_XPUB "tcp://127.0.0.1:6001"
+#define DEFAULT_XPUB "tcp://0.0.0.0:6001"
 #define DEFAULT_XSUB "ipc:///tmp/nginx_queue_listen"
-#define DEFAULT_SUB  "tcp://127.0.0.1:5000"
+//#define DEFAULT_SUB  "tcp://127.0.0.1:5000"
+#define DEFAULT_SUB  "tcp://0.0.0.0:5000"
 #define DEFAULT_PUSH "ipc:///tmp/nginx_queue_push"
 
 struct _zmq_proxy_args_t {
@@ -14,15 +17,12 @@ struct _zmq_proxy_args_t {
 };
 
 
-//  The subscriber thread requests messages starting with
-//  A and B, then reads and counts incoming messages.
 //app=test-app,serv=_undefined_,req=test-api-key,resp=GET.200
 
 static void
 subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 {
     printf("Starting Debug subscriber thread [%s] ... \n", args);
-    //  Subscribe to "A" and "B"
     void *subscriber = zsocket_new (ctx, ZMQ_SUB);
     zsocket_connect (subscriber, "%s", args);
     zsocket_set_subscribe (subscriber, "");
@@ -32,9 +32,11 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
         if (!string) {
             break;              //  Interrupted
         }
-        printf("> got: %s\n", string);
+        time_t now;
+        time(&now);
+        printf("> %s got: [%s]\n", ctime(&now), string);
         free (string);
-        zclock_sleep(1);
+        // zclock_sleep(1);
     }
     zsocket_destroy (ctx, subscriber);
 }
@@ -102,10 +104,12 @@ pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
             puts(" ... Debug receiver thread interrupted !");
             break;              //  Interrupted
         }
-        printf("> receiver got: %s\n", string);
+        time_t now;
+        time(&now);
+        printf("> %s receiver got: %s\n", ctime(&now), string);
         zstr_send(pipe, string);
         free (string);
-        zclock_sleep(1);
+        //zclock_sleep(1);
     }
     zsocket_destroy (ctx, receiver);
 
@@ -135,11 +139,11 @@ listener_thread (void *args, zctx_t *ctx, void *pipe)
 //  The main task starts the subscriber and publisher, and then sets
 //  itself up as a listening proxy. The listener runs as a child thread:
 //   usage: api-gateway-zmq-adaptor -d -p tcp://127.0.0.1:6001 -b ipc:///tmp/nginx_listener_queue -l tcp://127.0.0.1:5000 -u ipc:///tmp/nginx_queue_push
-//                 -p public address where messages from nginx are published
-//                 -b the local address to listen for messages from Nginx which are then proxied to -p address
+//                 -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
+//                 -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
 //
-//                 -l public address to listen for incoming messages
-//                 -u local address where messages from -l are pushed to Nginx
+//                 -l public address to listen for incoming messages sent to API Gateway
+//                 -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
 //
 //                 -d activates debug option, printing the messages on the output
 //                 -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
@@ -281,7 +285,7 @@ int main (int argc, char *argv[])
 
     // just making sure the current thread doesn't exit
     while( !zctx_interrupted ) {
-        zclock_sleep(5000);
+        zclock_sleep(500);
     }
 
     puts (" ... interrupted");

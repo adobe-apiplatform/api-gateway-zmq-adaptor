@@ -10,7 +10,10 @@ INSTALL ?= install
 all: ;
 
 install: all
-	gcc $(LIBS) src/api-gateway-zmq-adaptor.c -o api-gateway-zmq-adaptor
+	gcc $(LIBS) src/api-gateway-zmq-adaptor.c -o $(PREFIX)/api-gateway-zmq-adaptor
+
+run:
+	$(PREFIX)/api-gateway-zmq-adaptor
 
 test: all
 	echo "nothing to do for now"

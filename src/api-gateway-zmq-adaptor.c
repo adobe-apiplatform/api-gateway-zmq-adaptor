@@ -51,10 +51,12 @@ publisher_thread (void *args, zctx_t *ctx, void *pipe)
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
     int socket_bound = zsocket_connect (publisher, "%s", args);
 
+    char string [20];
+    int send_response = -100;
+    int i = 0;
     while (!zctx_interrupted) {
-        char string [20];
-        int send_response = -100;
-        for ( int i=0; i<1; i++) {
+        i = 0;
+        for ( i=0; i<1; i++) {
             sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
             send_response = zstr_send(publisher, string);
             if (send_response == -1) {
@@ -73,11 +75,12 @@ publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
     printf("Starting Test publisher thread for BlackBox [%s] ... \n", args);
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
     int socket_bound = zsocket_connect (publisher, "%s", args);
-
+    int i = 0;
     while (!zctx_interrupted) {
         char string [20];
         int send_response = -100;
-        for ( int i=0; i<1; i++) {
+        i = 0;
+        for ( i=0; i<1; i++) {
             sprintf (string, "SEND-%05d", randof (100000));
             send_response = zstr_send(publisher, string);
             if (send_response == -1) {

@@ -6,16 +6,52 @@ It runs along the `api-gateway` process on each node where the gateway is instal
 
 
 ### Status
-Experimental
+This module is under development and it's considered production ready, being used without any problems with the API Gateway.
 
 ### How it works
-This adapter establishes a bi-directional communication channel with the API Gateway :
+This adapter establishes a communication channel with the API Gateway.
+The API Gateway sends messages to this adaptor via `inproc://`, the ZMQ adaptor making them available for consumption further through the `XPUB` socket.
 
-* Outgoing direction: captures usage data form the API Gateway and publishes it on a given port where consumers can bind to
-* Incoming direction: listens for external messages targeting the Gateway, forwarding them to a local socket where the API Gateway listens
+```
+                         +---------------+
+                         |  API Gateway  |
+                         |---------------|
+                         |     PUB       |
+                         +---------------+
+                            (connect)
+                                |
+                                v
+                              (bind)
+ +------------------------------------------------------------+
+ |                            XSUB                            |
+ |                                                            |
+ |        ( default: ipc:///tmp/nginx_queue_listen )          |
+ |------------------------------------------------------------|
+ |                         ZMQ ADAPTOR                        |
+ |------------------------------------------------------------|
+ |                            XPUB                            |
+ |                                                            |
+ |                 ( default: tcp://0.0.0.0:6001 )            |
+ +------------------------------------------------------------+
+                             (bind)
+                                ^
+                                |
+                                |
+                                |
+                   -----------------------------
+                   ^                           ^
+                   |                           |
+               (connect)                   (connect)
+           +--------------------+   +--------------------+
+           |        SUB         |   |        SUB         |
+           |--------------------|   |--------------------|
+           |  Gateway Tracking  |   |  Gateway Tracking  |
+           |     Service        |   |     Service        |
+           +--------------------+   +--------------------+
+```
 
-The Adapter should use IPC to communicate with the API Gateway to reach a high performance and to avoid any port congestion.
-For better performance, the adapter can bind to a separate NIC for the external communication; this allows the Gateway to use all the ports for the regular API traffic, making the message queue as less intrusive as possible.
+For better performance, the adapter can bind to a separate NIC for the external communication;
+this allows the Gateway to use all the ports for the regular API traffic, making the message queue as less intrusive as possible.
 
 #### Capturing and sending usage data
 The ZMQ Adapter gets usage data from the API Gateway by opening a listening socket via IPC.
@@ -33,7 +69,7 @@ api-gateway-zmq-adaptor -p tcp://0.0.0.0:6001 -b ipc:///tmp/nginx_queue_listen
 * `-b` flag defines the address where the adapter binds to the Gateway
 
 #### Listening for external messages for the Gateway
-The ZMQ Adapter listens for incoming messages by opening a public port on the Gateway node and forwarding them to the API Gateway using ZMQ's [Espresso Pattern|http://zguide.zeromq.org/page:all#header-116]
+The ZMQ Adapter listens for incoming messages by opening a port on the Gateway node and forwarding them to the API Gateway using ZMQ's [Espresso Pattern|http://zguide.zeromq.org/page:all#header-116]
 
 ### Debugging
 Start the adapter with the `-d` flag to see all the messages published by the API Gateway and flowing through the adapter.

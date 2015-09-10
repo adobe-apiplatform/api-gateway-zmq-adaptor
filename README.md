@@ -55,7 +55,7 @@ this allows the Gateway to use all the ports for the regular API traffic, making
 
 #### Capturing and sending usage data
 The ZMQ Adapter gets usage data from the API Gateway by opening a listening socket via IPC.
-The API Gateway publishes the messages at that address ( i.e. `ipc:///tmp/nginx_queue_listen` ).
+The API Gateway publishes the messages to that address ( i.e. `ipc:///tmp/nginx_queue_listen` ).
 
 The ZMQ Adapter makes the messages available on a specific port, binding it to all IPs `0.0.0.0` by default, on the API Gateway Node.
 
@@ -65,11 +65,8 @@ There are 2 flags that control where to listen and where to publish messages as 
 api-gateway-zmq-adaptor -p tcp://0.0.0.0:6001 -b ipc:///tmp/nginx_queue_listen
 ```
 
-* `-p` flag defines the publishing address
-* `-b` flag defines the address where the adapter binds to the Gateway
-
-#### Listening for external messages for the Gateway
-The ZMQ Adapter listens for incoming messages by opening a port on the Gateway node and forwarding them to the API Gateway using ZMQ's [Espresso Pattern|http://zguide.zeromq.org/page:all#header-116]
+* `-p` flag defines the publishing address; consumers connect to this address in order to receive messages from the API Gateway
+* `-b` flag defines the internal address the adapter binds to in order to listen for messages sent by the Gateway
 
 ### Debugging
 Start the adapter with the `-d` flag to see all the messages published by the API Gateway and flowing through the adapter.

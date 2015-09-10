@@ -1,5 +1,17 @@
-//  Espresso Pattern
-//  This shows how to capture data using a pub-sub proxy
+/*
+* Copyright 2015 Adobe Systems Incorporated. All rights reserved.
+*
+* This file is licensed to you under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*  http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software distributed
+* under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR RESPRESENTATIONS
+* OF ANY KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations under the License.
+*/
 
 #include "czmq.h"
 #include "time.h"
@@ -16,8 +28,13 @@ struct _zmq_proxy_args_t {
     char *backend;
 };
 
+/*
 
-//app=test-app,serv=_undefined_,req=test-api-key,resp=GET.200
+ Starts a listener thread in the background just to print all the messages.
+ Use it for debugging purposes.
+ This method is activated with the '-d' flag.
+
+*/
 
 static void
 subscriber_thread (void *args, zctx_t *ctx, void *pipe)
@@ -41,8 +58,12 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
     zsocket_destroy (ctx, subscriber);
 }
 
-//  .split publisher thread
-//  The publisher sends random messages starting with A-J:
+/*
+
+  This method is activated with '-t' option and it's used for testing purposes only
+  The publisher sends random messages starting with A-J:
+
+ */
 
 static void
 publisher_thread (void *args, zctx_t *ctx, void *pipe)
@@ -68,6 +89,12 @@ publisher_thread (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
+/*
+
+  This method is activated with '-r' option and it's used for testing purposes only
+  The publisher sends random messages starting with SEND-
+
+*/
 
 static void
 publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
@@ -92,8 +119,12 @@ publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
+/*
 
-// PULLS from the PUSH socket
+  This method runs with the debug flag '-d'. In order to see the messages you need at least a consumer.
+  PULLS from the PUSH socket
+
+*/
 static void
 pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
 {
@@ -120,10 +151,13 @@ pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
 
 }
 
-//  .split listener thread
-//  The listener receives all messages flowing through the proxy, on its
-//  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
-//  attached child threads. In other languages your mileage may vary:
+/*
+
+  The listener receives all messages flowing through the proxy, on its
+  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
+  attached child threads. In other languages your mileage may vary:
+
+*/
 
 static void
 listener_thread (void *args, zctx_t *ctx, void *pipe)
@@ -140,20 +174,22 @@ listener_thread (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
-//  .split main thread
-//  The main task starts the subscriber and publisher, and then sets
-//  itself up as a listening proxy. The listener runs as a child thread:
-//   usage: api-gateway-zmq-adaptor -d -p tcp://127.0.0.1:6001 -b ipc:///tmp/nginx_listener_queue -l tcp://127.0.0.1:5000 -u ipc:///tmp/nginx_queue_push
-//                 -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
-//                 -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
-//
-//                 -l public address to listen for incoming messages sent to API Gateway
-//                 -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
-//
-//                 -d activates debug option, printing the messages on the output
-//                 -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
-//                 -r receiver flag simulates a publisher and receiver : PUB (bind) -> SUB (connect) -> PUSH (bind) -> PULL ( connect )
-//
+/*
+  .split main thread
+  The main task starts the subscriber and publisher, and then sets
+  itself up as a listening proxy. The listener runs as a child thread:
+   usage: api-gateway-zmq-adaptor -d -p tcp://127.0.0.1:6001 -b ipc:///tmp/nginx_listener_queue -l tcp://127.0.0.1:5000 -u ipc:///tmp/nginx_queue_push
+         -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
+         -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
+
+         -l public address to listen for incoming messages sent to API Gateway
+         -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
+
+         -d activates debug option, printing the messages on the output
+         -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
+         -r receiver flag simulates a publisher and receiver : PUB (bind) -> SUB (connect) -> PUSH (bind) -> PULL ( connect )
+
+*/
 
 int main (int argc, char *argv[])
 {
@@ -278,7 +314,7 @@ int main (int argc, char *argv[])
     }
 
     // Add a listener thread and start the proxy
-    // NOTE: where there are no remote consumers, messages are simply dropped
+    // NOTE: when there are no consumers, messages are simply dropped
     if ( debugFlag == 1 ) {
         zthread_fork (ctx, subscriber_thread, publisherAddress);
         //void *listener = zthread_fork (ctx, listener_thread, NULL);

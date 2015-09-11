@@ -13,27 +13,32 @@ This adapter establishes a communication channel with the API Gateway.
 The API Gateway sends messages to this adaptor via `inproc://`, the ZMQ adaptor making them available for consumption further through the `XPUB` socket.
 
 ```
-                         +---------------+
-                         |  API Gateway  |
-                         |---------------|
-                         |     PUB       |
-                         +---------------+
-                            (connect)
-                                |
-                                v
-                              (bind)
- +------------------------------------------------------------+
- |                            XSUB                            |
- |                                                            |
- |        ( default: ipc:///tmp/nginx_queue_listen )          |
- |------------------------------------------------------------|
- |                         ZMQ ADAPTOR                        |
- |------------------------------------------------------------|
- |                            XPUB                            |
- |                                                            |
- |                 ( default: tcp://0.0.0.0:6001 )            |
- +------------------------------------------------------------+
-                             (bind)
+ --------------------------------------------------------------------
+|                          API-GATEWAY BOX                            |
+|                                                                     |
+|                         +---------------+                           |
+|                         |  API Gateway  |                           |
+|                         |---------------|                           |
+|                         |     PUB       |                           |
+|                         +---------------+                           |
+|                            (connect)                                |
+|                                |                                    |
+|                                v                                    |
+|                              (bind)                                 |
+| +------------------------------------------------------------+      |
+| |                            XSUB                            |      |
+| |                                                            |      |
+| |        ( default: ipc:///tmp/nginx_queue_listen )          |      |
+| |------------------------------------------------------------|      |
+| |                         ZMQ ADAPTOR                        |      |
+| |------------------------------------------------------------|      |
+| |                            XPUB                            |      |
+| |                                                            |      |
+| |                 ( default: tcp://0.0.0.0:6001 )            |      |
+| +------------------------------------------------------------+      |
+|                             (bind)                                  |
+|                                                                     |
+ --------------------------------------------------------------------
                                 ^
                                 |
                                 |
@@ -83,7 +88,12 @@ To build the adaptor use:
 make install
 ```
 
-For a quick test run the adaptor with the `-t` flag using `^C` to stop it:
+To run the unit tests you can execute:
+```
+make test
+```
+
+For another quick test you can also run the adaptor with the `-t` flag using `^C` to stop it:
 
 ```
 $ /usr/local/api-gateway-zmq-adaptor -t

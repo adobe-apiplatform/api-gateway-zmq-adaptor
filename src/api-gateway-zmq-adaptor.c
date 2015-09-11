@@ -13,29 +13,20 @@
 * specific language governing permissions and limitations under the License.
 */
 
+#include "GwZmqAdaptor.h"
 #include "czmq.h"
 #include "time.h"
 
-// #define DEFAULT_XPUB "tcp://127.0.0.1:6001"
-#define DEFAULT_XPUB "tcp://0.0.0.0:6001"
-#define DEFAULT_XSUB "ipc:///tmp/nginx_queue_listen"
-//#define DEFAULT_SUB  "tcp://127.0.0.1:5000"
-#define DEFAULT_SUB  "tcp://0.0.0.0:5000"
-#define DEFAULT_PUSH "ipc:///tmp/nginx_queue_push"
-
-struct _zmq_proxy_args_t {
-    char *frontend;
-    char *backend;
-};
-
-/*
-
- Starts a listener thread in the background just to print all the messages.
- Use it for debugging purposes.
- This method is activated with the '-d' flag.
-
+/**
+*  The functions bellow up to the main() are used for debugging or quick testing purposes only
 */
 
+/**
+* Starts a listener thread in the background just to print all the messages.
+* Use it for debugging purposes.
+* This method is activated with the '-d' flag.
+*
+*/
 static void
 subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 {
@@ -58,13 +49,12 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
     zsocket_destroy (ctx, subscriber);
 }
 
-/*
-
-  This method is activated with '-t' option and it's used for testing purposes only
-  The publisher sends random messages starting with A-J:
-
- */
-
+/**
+*
+*  This method is activated with '-t' option and it's used for testing purposes only
+*  The publisher sends random messages starting with A-J:
+*
+*/
 static void
 publisher_thread (void *args, zctx_t *ctx, void *pipe)
 {
@@ -89,11 +79,11 @@ publisher_thread (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
-/*
-
-  This method is activated with '-r' option and it's used for testing purposes only
-  The publisher sends random messages starting with SEND-
-
+/**
+*
+*  This method is activated with '-r' option and it's used for testing purposes only
+*  The publisher sends random messages starting with SEND-
+*
 */
 
 static void
@@ -119,11 +109,10 @@ publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
-/*
-
-  This method runs with the debug flag '-d'. In order to see the messages you need at least a consumer.
-  PULLS from the PUSH socket
-
+/**
+*
+*  This method runs with the debug flag '-d'. In order to see the messages you need at least a consumer.
+*  PULLS from the PUSH socket
 */
 static void
 pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
@@ -151,14 +140,12 @@ pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
 
 }
 
-/*
-
-  The listener receives all messages flowing through the proxy, on its
-  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
-  attached child threads. In other languages your mileage may vary:
-
+/**
+*
+*  The listener receives all messages flowing through the proxy, on its
+*  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
+*  attached child threads. In other languages your mileage may vary:
 */
-
 static void
 listener_thread (void *args, zctx_t *ctx, void *pipe)
 {
@@ -174,23 +161,21 @@ listener_thread (void *args, zctx_t *ctx, void *pipe)
     }
 }
 
-/*
-  .split main thread
-  The main task starts the subscriber and publisher, and then sets
-  itself up as a listening proxy. The listener runs as a child thread:
-   usage: api-gateway-zmq-adaptor -d -p tcp://127.0.0.1:6001 -b ipc:///tmp/nginx_listener_queue -l tcp://127.0.0.1:5000 -u ipc:///tmp/nginx_queue_push
-         -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
-         -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
-
-         -l public address to listen for incoming messages sent to API Gateway
-         -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
-
-         -d activates debug option, printing the messages on the output
-         -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
-         -r receiver flag simulates a publisher and receiver : PUB (bind) -> SUB (connect) -> PUSH (bind) -> PULL ( connect )
-
+/**
+*  .split main thread
+*  The main task starts the subscriber and publisher, and then sets
+*  itself up as a listening proxy. The listener runs as a child thread:
+*   usage: api-gateway-zmq-adaptor -d -p tcp://127.0.0.1:6001 -b ipc:///tmp/nginx_listener_queue -l tcp://127.0.0.1:5000 -u ipc:///tmp/nginx_queue_push
+*         -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
+*         -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
+*
+*         -l public address to listen for incoming messages sent to API Gateway
+*         -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
+*
+*         -d activates debug option, printing the messages on the output
+*         -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
+*         -r receiver flag simulates a publisher and receiver : PUB (bind) -> SUB (connect) -> PUSH (bind) -> PULL ( connect )
 */
-
 int main (int argc, char *argv[])
 {
     int major, minor, patch, lmajor, lminor, lpatch;
@@ -247,7 +232,7 @@ int main (int argc, char *argv[])
     }
 
     //  Set the context for the child threads
-    zctx_t *ctx = zctx_new ();
+    zctx_t *ctx = gw_zmq_init();
 
     //
     // Black Box Pattern impl
@@ -297,17 +282,7 @@ int main (int argc, char *argv[])
     // ---------------------------------------
     //
 
-    void *subscriber = zsocket_new (ctx, ZMQ_XSUB);
-    int subscriberSocketResult = zsocket_bind (subscriber, "%s", subscriberAddress);
-    assert( subscriberSocketResult >= 0 );
-
-    // Start XPUB Proxy -> remote consumers connect here
-    void *publisher = zsocket_new (ctx, ZMQ_XPUB);
-    int publisherBindResult = zsocket_bind (publisher, "%s", publisherAddress);
-    assert( publisherBindResult >= 0 );
-
-    printf("\nStarting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress );
-    zproxy_t *xpub_xsub_thread = zproxy_new(ctx, subscriber, publisher);
+    start_gateway_listener(ctx, subscriberAddress, publisherAddress);
 
     if ( testFlag == 1 ) {
         zthread_fork (ctx, publisher_thread, subscriberAddress);
@@ -331,6 +306,6 @@ int main (int argc, char *argv[])
 
     puts (" ... interrupted");
     //  Tell attached threads to exit
-    zctx_destroy (&ctx);
+    gw_zmq_destroy( &ctx );
     return 0;
 }

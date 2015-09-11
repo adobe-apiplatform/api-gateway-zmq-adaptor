@@ -14,45 +14,45 @@ The API Gateway sends messages to this adaptor via `inproc://`, the ZMQ adaptor 
 
 ```
  --------------------------------------------------------------------
-|                          API-GATEWAY BOX                            |
-|                                                                     |
-|                         +---------------+                           |
-|                         |  API Gateway  |                           |
-|                         |---------------|                           |
-|                         |     PUB       |                           |
-|                         +---------------+                           |
-|                            (connect)                                |
-|                                |                                    |
-|                                v                                    |
-|                              (bind)                                 |
-| +------------------------------------------------------------+      |
-| |                            XSUB                            |      |
-| |                                                            |      |
-| |        ( default: ipc:///tmp/nginx_queue_listen )          |      |
-| |------------------------------------------------------------|      |
-| |                         ZMQ ADAPTOR                        |      |
-| |------------------------------------------------------------|      |
-| |                            XPUB                            |      |
-| |                                                            |      |
-| |                 ( default: tcp://0.0.0.0:6001 )            |      |
-| +------------------------------------------------------------+      |
-|                             (bind)                                  |
-|                                                                     |
+|                            API-GATEWAY BOX                         |
+|                                                                    |
+|                           +---------------+                        |
+|                           |  API Gateway  |                        |
+|                           |---------------|                        |
+|                           |     PUB       |                        |
+|                           +---------------+                        |
+|                              (connect)                             |
+|                                  |                                 |
+|                                  v                                 |
+|                                (bind)                              |
+|   +------------------------------------------------------------+   |
+|   |                            XSUB                            |   |
+|   |                                                            |   |
+|   |        ( default: ipc:///tmp/nginx_queue_listen )          |   |
+|   |------------------------------------------------------------|   |
+|   |                         ZMQ ADAPTOR                        |   |
+|   |------------------------------------------------------------|   |
+|   |                            XPUB                            |   |
+|   |                                                            |   |
+|   |                 ( default: tcp://0.0.0.0:6001 )            |   |
+|   +------------------------------------------------------------+   |
+|                               (bind)                               |
+|                                 |                                  |
  --------------------------------------------------------------------
-                                ^
-                                |
-                                |
-                                |
-                   -----------------------------
-                   ^                           ^
-                   |                           |
-               (connect)                   (connect)
-           +--------------------+   +--------------------+
-           |        SUB         |   |        SUB         |
-           |--------------------|   |--------------------|
-           |  Gateway Tracking  |   |  Gateway Tracking  |
-           |     Service        |   |     Service        |
-           +--------------------+   +--------------------+
+                                  ^
+                                  |
+                                  |
+                                  |
+                     -----------------------------
+                     ^                           ^
+                     |                           |
+                 (connect)                   (connect)
+             +--------------------+   +--------------------+
+             |        SUB         |   |        SUB         |
+             |--------------------|   |--------------------|
+             |  Gateway Tracking  |   |  Gateway Tracking  |
+             |     Service        |   |     Service        |
+             +--------------------+   +--------------------+
 ```
 
 For better performance, the adapter can bind to a separate NIC for the external communication;
@@ -92,6 +92,7 @@ To run the unit tests you can execute:
 ```
 make test
 ```
+Unit tests require the [check](http://check.sourceforge.net/doc/check_html/index.html#Top) library.
 
 For another quick test you can also run the adaptor with the `-t` flag using `^C` to stop it:
 

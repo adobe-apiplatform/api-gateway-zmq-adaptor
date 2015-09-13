@@ -15,7 +15,12 @@ LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib -lCppUTest -lCppUTestExt
 
 all: ;
 
-install: all
+process-resources:
+	rm -rf $(BUILD_DIR)/*
+	mkdir -p $(BUILD_DIR)/test_classes
+	mkdir -p $(BUILD_DIR)/classes
+
+install: process-resources
 	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o
 	gcc $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o src/api-gateway-zmq-adaptor.c -o $(BUILD_DIR)/api-gateway-zmq-adaptor
 	cp $(BUILD_DIR)/api-gateway-zmq-adaptor $(PREFIX)/api-gateway-zmq-adaptor
@@ -23,11 +28,7 @@ install: all
 run:
 	$(PREFIX)/api-gateway-zmq-adaptor
 
-test: all
-	echo "nothing to do for now"
-	rm -rf $(BUILD_DIR)/*
-	mkdir -p $(BUILD_DIR)/test_classes
-	mkdir -p $(BUILD_DIR)/classes
+test: process-resources
 	gcc -c tests/test_published_messages.c -o $(BUILD_DIR)/test_classes/test_published_messages.o
 	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o
 	gcc  -lcheck $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o  $(BUILD_DIR)/test_classes/test_published_messages.o -o $(BUILD_DIR)/check_test_runner

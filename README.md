@@ -82,6 +82,15 @@ Start the adapter with the `-d` flag to see all the messages published by the AP
  
 ## Developer guide
 
+### Requirements
+`zeromq` , `czmq`
+
+On a MAC you can install them using Brew:
+```bash
+brew install zeromq
+brew install czmq
+```
+
 To build the adaptor use:
 
 ```

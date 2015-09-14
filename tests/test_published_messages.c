@@ -114,8 +114,10 @@ START_TEST(test_gateway_listener)
     zclock_sleep(400);
     zctx_interrupted = true;
 
-//    ck_assert_msg( messages_received_counter >= 10, "The consumer should have received at least 10 messages");
-    ck_assert_int_eq( messages_received_counter, 15 );
+    char s_counter[100] = "";
+    int expected_min_messages = 15;
+    sprintf(s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
+    ck_assert_msg( messages_received_counter >= expected_min_messages, s_counter);
 
     gw_zmq_destroy( &ctx );
     ck_assert_msg(ctx == NULL, "ZMQ Context should be destroyed. ");

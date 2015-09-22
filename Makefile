@@ -42,3 +42,35 @@ test-cpp : all
 
 clean:
 	rm -rf target
+
+docker:
+	docker build -t adobeapiplatform/apigateway-zmq-adaptor .
+
+.PHONY: docker-ssh
+docker-ssh:
+	docker run -ti --entrypoint='bash' adobeapiplatform/apigateway:latest
+
+.PHONY: docker-run
+docker-run: process-resources
+	docker run --rm --name="apigateway-zmq-adaptor" --ipc="host" --net="host"  \
+			--cpuset-cpus="2-2" \
+			-p 6001:6001 \
+			-e "DEBUG=false" -e "GATEWAY_LISTEN_QUEUE=ipc://@nginx_queue_listen" \
+			adobeapiplatform/apigateway-zmq-adaptor:latest
+
+.PHONY: docker-debug
+docker-debug: process-resources
+	docker run --rm --name="apigateway-zmq-adaptor" --ipc="host" --net="host"  \
+			--cpuset-cpus="2-3" \
+			-p 6001:6001 \
+			-e "DEBUG=true" -e "GATEWAY_LISTEN_QUEUE=ipc://@nginx_queue_listen" \
+			adobeapiplatform/apigateway-zmq-adaptor:latest
+
+.PHONY: docker-attach
+docker-attach:
+	docker exec -i -t apigateway-zmq-adaptor bash
+
+.PHONY: docker-stop
+docker-stop:
+	docker stop apigateway-zmq-adaptor
+	docker rm apigateway-zmq-adaptor

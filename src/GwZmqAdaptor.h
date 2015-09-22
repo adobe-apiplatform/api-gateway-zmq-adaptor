@@ -7,7 +7,9 @@
 */
 #define DEFAULT_XPUB "tcp://0.0.0.0:6001"
 /**
-* Default address where the Gateway is sending the tracking messages
+* Default address where the Gateway is sending the tracking messages.
+* @see: http://api.zeromq.org/4-1:zmq-ipc
+* @see: http://man7.org/linux/man-pages/man7/unix.7.html
 */
 #define DEFAULT_XSUB "ipc:///tmp/nginx_queue_listen"
 

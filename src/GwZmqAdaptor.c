@@ -50,7 +50,7 @@ and proxying them to a local IP address on XPUB . Remote consumers should connec
 void
 start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddress)
 {
-    printf("Starting Gateway Listener \n");
+    fprintf(stderr,"Starting Gateway Listener \n");
 
     void *subscriber = zsocket_new (ctx, ZMQ_XSUB);
     int subscriberSocketResult = zsocket_bind (subscriber, "%s", subscriberAddress);
@@ -61,7 +61,7 @@ start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddr
     int publisherBindResult = zsocket_bind (publisher, "%s", publisherAddress);
     assert( publisherBindResult >= 0 );
 
-    printf("Starting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress );
+    fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress);
     zproxy_t *xpub_xsub_thread = zproxy_new(ctx, subscriber, publisher);
 }
 

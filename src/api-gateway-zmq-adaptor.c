@@ -30,7 +30,7 @@
 static void
 subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 {
-    printf("Starting Debug subscriber thread [%s] ... \n", args);
+    fprintf(stderr, "Starting Debug subscriber thread [%s] ... \n", args);
     void *subscriber = zsocket_new (ctx, ZMQ_SUB);
     zsocket_connect (subscriber, "%s", args);
     zsocket_set_subscribe (subscriber, "");
@@ -58,7 +58,7 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 static void
 publisher_thread (void *args, zctx_t *ctx, void *pipe)
 {
-    printf("Starting Test publisher thread [%s] ... \n", args);
+    fprintf(stderr, "Starting Test publisher thread [%s] ... \n", args);
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
     int socket_bound = zsocket_connect (publisher, "%s", args);
 
@@ -181,9 +181,7 @@ int main (int argc, char *argv[])
     int major, minor, patch, lmajor, lminor, lpatch;
     zmq_version (&major, &minor, &patch);
     zsys_version (&lmajor, &lminor, &lpatch);
-    char str_version[60];
-    sprintf( str_version, "ZeroMQ version %d.%d.%d (czmq %d.%d.%d)", major, minor, patch, lmajor, lminor, lpatch);
-    puts(str_version);
+    fprintf(stderr, "ZeroMQ version %d.%d.%d (czmq %d.%d.%d) \n", major, minor, patch, lmajor, lminor, lpatch);
 
     // parse command line args
     char c;
@@ -213,20 +211,20 @@ int main (int argc, char *argv[])
                 break;
             case 'd':
                 debugFlag = 1;
-                puts("RUNNING IN DEBUGGING MODE");
+                fprintf(stderr,"RUNNING IN DEBUGGING MODE\n");
                 break;
             case 't':
                 debugFlag = 1;
                 testFlag = 1;
-                puts("RUNNING IN TEST MODE & DEBUG MODE for XPUB -> XSUB");
+                fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for XPUB -> XSUB\n");
                 break;
             case 'r':
                 debugFlag = 1;
                 testBlackBoxFlag = 1;
-                puts("RUNNING IN TEST MODE & DEBUG MODE for SUB -> PUSH");
+                fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for SUB -> PUSH\n");
                 break;
             case '?':
-                puts("Unrecognized option!");
+                fprintf(stderr,"Unrecognized option!\n");
                 break;
         }
     }
@@ -260,7 +258,7 @@ int main (int argc, char *argv[])
     assert( pushSocketResult >= 0 );
 
 
-    printf("\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
+    fprintf(stderr,"\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
     zproxy_t *sub_push_thread = zproxy_new(ctx, listenerSocket, pushSocket);
 
     if ( testBlackBoxFlag == 1 ) {
@@ -304,7 +302,7 @@ int main (int argc, char *argv[])
         zclock_sleep(500);
     }
 
-    puts (" ... interrupted");
+    fprintf(stderr," ... interrupted");
     //  Tell attached threads to exit
     gw_zmq_destroy( &ctx );
     return 0;

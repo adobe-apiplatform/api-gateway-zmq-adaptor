@@ -32,19 +32,58 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 {
     fprintf(stderr, "Starting Debug subscriber thread [%s] ... \n", args);
     void *subscriber = zsocket_new (ctx, ZMQ_SUB);
+
+    zsocket_set_tcp_keepalive_idle( subscriber, 300 );
+    zsocket_set_tcp_keepalive_cnt( subscriber, 300 );
+    zsocket_set_tcp_keepalive_intvl( subscriber, 300 );
+
     zsocket_connect (subscriber, "%s", args);
+
     zsocket_set_subscribe (subscriber, "");
 
+
+    void *watch;
+    unsigned long elapsed_counter = 0;
+    unsigned long elapsed ;
+    unsigned long elapsed_since_last_message;
+    double min_latency = DBL_MAX;
+    double max_latency = -1;
+    double avg_latency = -1;
+    int messages_received_counter = 0;
+    int messages_received_latency = 0;
+
     while (!zctx_interrupted) {
+
+        watch = zmq_stopwatch_start ();
         char *string = zstr_recv (subscriber);
         if (!string) {
             break;              //  Interrupted
         }
-        time_t now;
-        time(&now);
-        printf("> %s got: [%s]\n", ctime(&now), string);
+        elapsed_since_last_message = zmq_stopwatch_stop (watch);
+
+        watch = zmq_stopwatch_start ();
+//        time_t now;
+//        time(&now);
+        //printf("> %s got: [%s]\n", ctime(&now), string);
         free (string);
-        // zclock_sleep(1);
+
+        messages_received_counter ++;
+        elapsed = zmq_stopwatch_stop (watch);
+        messages_received_latency += elapsed;
+
+        if ( elapsed < min_latency ) min_latency = elapsed;
+        if ( elapsed > max_latency ) max_latency = elapsed;
+        avg_latency = messages_received_latency / messages_received_counter;
+
+        elapsed_counter += elapsed + elapsed_since_last_message;
+        if ( elapsed_counter >= 1000*1000 ) {
+            fprintf(stderr, " %d messages processed in %lu [ms] with latency min=%.4f[ms], max=%.4f[ms], avg=%.4f[ms]\n", messages_received_counter, elapsed_counter/1000, min_latency/1000, max_latency/1000, avg_latency/1000);
+            min_latency = DBL_MAX;
+            max_latency = -1;
+            avg_latency = -1;
+            elapsed_counter = 0;
+            messages_received_counter = 0;
+        }
     }
     zsocket_destroy (ctx, subscriber);
 }
@@ -242,33 +281,33 @@ int main (int argc, char *argv[])
     // -------------------------------------
     //
 
-    void *listenerSocket = zsocket_new(ctx, ZMQ_SUB);
-    int listenerSocketResult = -1;
-    if ( testBlackBoxFlag == 0 ) {
-        listenerSocketResult = zsocket_connect(listenerSocket, "%s", listenerAddress);
-    } else {
-        listenerSocketResult = zsocket_bind(listenerSocket, "%s", listenerAddress);
-    }
-    assert( listenerSocketResult >= 0 );
-
-    zsocket_set_subscribe (listenerSocket, ""); // NOTE: Don't miss this directive, otherwise the SUB doesn't get anything
-
-    void *pushSocket = zsocket_new(ctx, ZMQ_PUSH);
-    int pushSocketResult = zsocket_bind(pushSocket, "%s", pushAddress);
-    assert( pushSocketResult >= 0 );
-
-
-    fprintf(stderr,"\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
-    zproxy_t *sub_push_thread = zproxy_new(ctx, listenerSocket, pushSocket);
-
-    if ( testBlackBoxFlag == 1 ) {
-        zthread_fork (ctx, publisher_thread_for_black_box, listenerAddress);
-    }
-
-    if ( debugFlag == 1 ) {
-        // you have to have at least 1 socket to PULL to see the messages
-        zthread_fork (ctx, pull_receiver_thread, pushAddress);
-    }
+//    void *listenerSocket = zsocket_new(ctx, ZMQ_SUB);
+//    int listenerSocketResult = -1;
+//    if ( testBlackBoxFlag == 0 ) {
+//        listenerSocketResult = zsocket_connect(listenerSocket, "%s", listenerAddress);
+//    } else {
+//        listenerSocketResult = zsocket_bind(listenerSocket, "%s", listenerAddress);
+//    }
+//    assert( listenerSocketResult >= 0 );
+//
+//    zsocket_set_subscribe (listenerSocket, ""); // NOTE: Don't miss this directive, otherwise the SUB doesn't get anything
+//
+//    void *pushSocket = zsocket_new(ctx, ZMQ_PUSH);
+//    int pushSocketResult = zsocket_bind(pushSocket, "%s", pushAddress);
+//    assert( pushSocketResult >= 0 );
+//
+//
+//    fprintf(stderr,"\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
+//    zproxy_t *sub_push_thread = zproxy_new(ctx, listenerSocket, pushSocket);
+//
+//    if ( testBlackBoxFlag == 1 ) {
+//        zthread_fork (ctx, publisher_thread_for_black_box, listenerAddress);
+//    }
+//
+//    if ( debugFlag == 1 ) {
+//        // you have to have at least 1 socket to PULL to see the messages
+//        zthread_fork (ctx, pull_receiver_thread, pushAddress);
+//    }
 
     //
     // Espresso Pattern impl

@@ -58,6 +58,7 @@ start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddr
 
     // Start XPUB Proxy -> remote consumers connect here
     void *publisher = zsocket_new (ctx, ZMQ_XPUB);
+    zsocket_set_xpub_verbose (publisher, 1);
     int publisherBindResult = zsocket_bind (publisher, "%s", publisherAddress);
     assert( publisherBindResult >= 0 );
 

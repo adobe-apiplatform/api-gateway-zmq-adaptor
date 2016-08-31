@@ -46,6 +46,10 @@ clean:
 docker:
 	docker build -t adobeapiplatform/apigateway-zmq-adaptor .
 
+.PHONY: test-docker
+test-docker:
+	docker build -t adobeapiplatform/api-gateway-zmq-adaptor-tests -f ./tests/Dockerfile .
+
 .PHONY: docker-ssh
 docker-ssh:
 	docker run -ti --entrypoint='bash' adobeapiplatform/apigateway:latest

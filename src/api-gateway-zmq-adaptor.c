@@ -62,9 +62,11 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
         elapsed_since_last_message = zmq_stopwatch_stop (watch);
 
         watch = zmq_stopwatch_start ();
-//        time_t now;
-//        time(&now);
-        //printf("> %s got: [%s]\n", ctime(&now), string);
+
+        /*time_t now;
+        time(&now);
+        fprintf(stderr, "> %s got: [%s]\n", ctime(&now), string);*/
+
         free (string);
 
         messages_received_counter ++;
@@ -77,7 +79,7 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 
         elapsed_counter += elapsed + elapsed_since_last_message;
         if ( elapsed_counter >= 1000*1000 ) {
-            fprintf(stderr, " %d messages processed in %lu [ms] with latency min=%.4f[ms], max=%.4f[ms], avg=%.4f[ms]\n", messages_received_counter, elapsed_counter/1000, min_latency/1000, max_latency/1000, avg_latency/1000);
+            fprintf(stderr, "api-gateway-zmq-adaptor - %d messages processed in %lu [ms] with latency min=%.4f[ms], max=%.4f[ms], avg=%.4f[ms]\n", messages_received_counter, elapsed_counter/1000, min_latency/1000, max_latency/1000, avg_latency/1000);
             min_latency = DBL_MAX;
             max_latency = -1;
             avg_latency = -1;
@@ -112,71 +114,10 @@ publisher_thread (void *args, zctx_t *ctx, void *pipe)
             if (send_response == -1) {
                 break;              //  Interrupted
             }
-            printf(" ... sending:%s\n", string);
+            fprintf(stderr, " ... sending:%s\n", string);
         }
         zclock_sleep (1000);
     }
-}
-
-/**
-*
-*  This method is activated with '-r' option and it's used for testing purposes only
-*  The publisher sends random messages starting with SEND-
-*
-*/
-
-static void
-publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
-{
-    printf("Starting Test publisher thread for BlackBox [%s] ... \n", args);
-    void *publisher = zsocket_new (ctx, ZMQ_PUB);
-    int socket_bound = zsocket_connect (publisher, "%s", args);
-    int i = 0;
-    while (!zctx_interrupted) {
-        char string [20];
-        int send_response = -100;
-        i = 0;
-        for ( i=0; i<1; i++) {
-            sprintf (string, "SEND-%05d", randof (100000));
-            send_response = zstr_send(publisher, string);
-            if (send_response == -1) {
-                break;              //  Interrupted
-            }
-            printf(" ... sending:%s\n", string);
-        }
-        zclock_sleep (1000);
-    }
-}
-
-/**
-*
-*  This method runs with the debug flag '-d'. In order to see the messages you need at least a consumer.
-*  PULLS from the PUSH socket
-*/
-static void
-pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
-{
-    printf("Starting Debug receiver thread [%s] ... \n", args);
-
-    void *receiver = zsocket_new (ctx, ZMQ_PULL);
-    int receiverConnectResult = zsocket_connect (receiver, "%s", args);
-    assert( receiverConnectResult >= 0 );
-
-    while (!zctx_interrupted) {
-        char *string = zstr_recv (receiver);
-        if (!string) {
-            puts(" ... Debug receiver thread interrupted !");
-            break;              //  Interrupted
-        }
-        time_t now;
-        time(&now);
-        printf("> %s receiver got: %s\n", ctime(&now), string);
-        zstr_send(pipe, string);
-        free (string);
-        //zclock_sleep(1);
-    }
-    zsocket_destroy (ctx, receiver);
-
 }
 
 /**
@@ -208,12 +149,8 @@ listener_thread (void *args, zctx_t *ctx, void *pipe)
 *         -p public address where messages from API Gateway are published. This is where you can listen for messages coming from the API Gateway
 *         -b the local address to listen for messages from API Gateway which are then proxied ( forwarded ) to -p address
 *
-*         -l public address to listen for incoming messages sent to API Gateway
-*         -u local address where messages from -l are pushed ( forwarded ) to the API Gateway
-*
 *         -d activates debug option, printing the messages on the output
 *         -t test mode simulates a publisher for XSUB/XPUB with random messages : PUB -> XSUB -> XPUB -> SUB
-*         -r receiver flag simulates a publisher and receiver : PUB (bind) -> SUB (connect) -> PUSH (bind) -> PULL ( connect )
 */
 int main (int argc, char *argv[])
 {
@@ -226,8 +163,6 @@ int main (int argc, char *argv[])
     char c;
     char *subscriberAddress = DEFAULT_XSUB;
     char *publisherAddress = DEFAULT_XPUB;
-    char *listenerAddress = DEFAULT_SUB;
-    char *pushAddress = DEFAULT_PUSH;
     int debugFlag = 0;
     int testFlag = 0;
     int testBlackBoxFlag = 0;
@@ -242,12 +177,6 @@ int main (int argc, char *argv[])
             case 'p':
                 publisherAddress = strdup(optarg);
                 break;
-            case 'l':
-                listenerAddress = strdup(optarg);
-                break;
-            case 'u':
-                pushAddress = strdup(optarg);
-                break;
             case 'd':
                 debugFlag = 1;
                 fprintf(stderr,"RUNNING IN DEBUGGING MODE\n");
@@ -257,11 +186,6 @@ int main (int argc, char *argv[])
                 testFlag = 1;
                 fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for XPUB -> XSUB\n");
                 break;
-            case 'r':
-                debugFlag = 1;
-                testBlackBoxFlag = 1;
-                fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for SUB -> PUSH\n");
-                break;
             case '?':
                 fprintf(stderr,"Unrecognized option!\n");
                 break;
@@ -270,44 +194,6 @@ int main (int argc, char *argv[])
 
     //  Set the context for the child threads
     zctx_t *ctx = gw_zmq_init();
-
-    //
-    // Black Box Pattern impl
-    // @see http://zguide.zeromq.org/page:all#header-119
-    // -------------------------------------
-    //     SUB        ->      PUSH
-    //  public Addr   ->    internal Addr
-    //   CONNECT      ->      BIND
-    // -------------------------------------
-    //
-
-//    void *listenerSocket = zsocket_new(ctx, ZMQ_SUB);
-//    int listenerSocketResult = -1;
-//    if ( testBlackBoxFlag == 0 ) {
-//        listenerSocketResult = zsocket_connect(listenerSocket, "%s", listenerAddress);
-//    } else {
-//        listenerSocketResult = zsocket_bind(listenerSocket, "%s", listenerAddress);
-//    }
-//    assert( listenerSocketResult >= 0 );
-//
-//    zsocket_set_subscribe (listenerSocket, ""); // NOTE: Don't miss this directive, otherwise the SUB doesn't get anything
-//
-//    void *pushSocket = zsocket_new(ctx, ZMQ_PUSH);
-//    int pushSocketResult = zsocket_bind(pushSocket, "%s", pushAddress);
-//    assert( pushSocketResult >= 0 );
-//
-//
-//    fprintf(stderr,"\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
-//    zproxy_t *sub_push_thread = zproxy_new(ctx, listenerSocket, pushSocket);
-//
-//    if ( testBlackBoxFlag == 1 ) {
-//        zthread_fork (ctx, publisher_thread_for_black_box, listenerAddress);
-//    }
-//
-//    if ( debugFlag == 1 ) {
-//        // you have to have at least 1 socket to PULL to see the messages
-//        zthread_fork (ctx, pull_receiver_thread, pushAddress);
-//    }
 
     //
     // Espresso Pattern impl

@@ -50,17 +50,19 @@ RUN apk update \
     && rm -rf /var/cache/apk/*
 
 RUN apk update \
-    && apk add libgcc libstdc++
+    && apk add libgcc libstdc++ \
+    && rm -rf /var/cache/apk/*
 
 # --- DEV ONLY ---
+# --- COMPILE THE LOCAL SOURCES ---
 # RUN apk update \
 #    && apk add \
 #           gcc tar libtool zlib make musl-dev openssl-dev g++ zlib-dev curl \
 #    && apk add check-dev
-# COPY src /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/src
-# COPY tests /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/tests
-# COPY Makefile /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/Makefile
-# RUN cd /tmp/api-gateway-zmq-adaptor-* \
+#COPY src /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/src
+#COPY tests /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/tests
+#COPY Makefile /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}/Makefile
+#RUN cd /tmp/api-gateway-zmq-adaptor-* \
 #         && make test \
 #         && mkdir -p /usr/local/sbin \
 #         && PREFIX=/usr/local/sbin make install \

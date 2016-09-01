@@ -122,3 +122,19 @@ Starting Debug subscriber thread [tcp://0.0.0.0:6001] ...
  ... sending:PUB-J-19755
 > got: PUB-J-19755
 ```
+
+### Developer guide for Docker
+
+To build a Docker container with the adaptor use:
+
+```bash
+make docker
+```
+> NOTE: This command uses a public Release to build the container. 
+To bulid the code from the local machine edit the Dockerfile and uncomment the `DEV ONLY` section.
+
+To run the tests in the docker container use:
+
+```bash
+make test-docker
+```

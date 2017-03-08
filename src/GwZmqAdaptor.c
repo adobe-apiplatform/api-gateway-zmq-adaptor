@@ -17,19 +17,18 @@
 #include "czmq.h"
 #include "time.h"
 
-zctx_t *
+void *
 gw_zmq_init()
 {
     //  Set the context for the child threads
-    zctx_t *ctx = zctx_new ();
-    return ctx;
+    return zmq_ctx_new ();
 }
 
-void
-gw_zmq_destroy( zctx_t **ctx )
+int
+gw_zmq_destroy( void *ctx )
 {
     //  Tell attached threads to exit
-    zctx_destroy(ctx);
+    return zmq_ctx_term(ctx);
 }
 
 /*
@@ -48,21 +47,23 @@ and proxying them to a local IP address on XPUB . Remote consumers should connec
 */
 
 void
-start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddress)
+start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddress)
 {
     fprintf(stderr,"Starting Gateway Listener \n");
 
-    void *subscriber = zsocket_new (ctx, ZMQ_XSUB);
-    int subscriberSocketResult = zsocket_bind (subscriber, "%s", subscriberAddress);
-    assert( subscriberSocketResult >= 0 );
+    void *subscriber = zmq_socket (ctx, ZMQ_XSUB);
+    int subscriberSocketResult = zmq_bind (subscriber, subscriberAddress);
+    assert( subscriberSocketResult == 0 );
 
     // Start XPUB Proxy -> remote consumers connect here
-    void *publisher = zsocket_new (ctx, ZMQ_XPUB);
-    zsocket_set_xpub_verbose (publisher, 1);
-    int publisherBindResult = zsocket_bind (publisher, "%s", publisherAddress);
-    assert( publisherBindResult >= 0 );
+    void *publisher = zmq_socket (ctx, ZMQ_XPUB);
+    zmq_setsockopt (publisher, ZMQ_XPUB_VERBOSE, "1", 1);
+    int publisherBindResult = zmq_bind (publisher, publisherAddress);
+    assert( publisherBindResult == 0 );
 
     fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress);
-    zproxy_t *xpub_xsub_thread = zproxy_new(ctx, subscriber, publisher);
-}
+    // TODO: use actor
+    int fork_result = fork ();
 
+    zmq_proxy( subscriber, publisher, NULL);
+}

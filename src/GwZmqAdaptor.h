@@ -24,13 +24,13 @@
 
 #include "czmq.h"
 
-zctx_t *
+void *
 gw_zmq_init();
 
-void
-gw_zmq_destroy( zctx_t **ctx );
+int
+gw_zmq_destroy( void *ctx );
 
 void
-start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddress);
+start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddress);
 
 #endif

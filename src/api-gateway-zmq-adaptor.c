@@ -28,7 +28,7 @@
 *
 */
 static void
-subscriber_thread (void *args, zctx_t *ctx, void *pipe)
+subscriber_thread (void *args, void *ctx, void *pipe)
 {
     fprintf(stderr, "Starting Debug subscriber thread [%s] ... \n", args);
     void *subscriber = zsocket_new (ctx, ZMQ_SUB);
@@ -95,7 +95,7 @@ subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 *
 */
 static void
-publisher_thread (void *args, zctx_t *ctx, void *pipe)
+publisher_thread (void *args, void *ctx, void *pipe)
 {
     fprintf(stderr, "Starting Test publisher thread [%s] ... \n", args);
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
@@ -126,7 +126,7 @@ publisher_thread (void *args, zctx_t *ctx, void *pipe)
 */
 
 static void
-publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
+publisher_thread_for_black_box (void *args, void *ctx, void *pipe)
 {
     printf("Starting Test publisher thread for BlackBox [%s] ... \n", args);
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
@@ -154,7 +154,7 @@ publisher_thread_for_black_box (void *args, zctx_t *ctx, void *pipe)
 *  PULLS from the PUSH socket
 */
 static void
-pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
+pull_receiver_thread (void *args, void *ctx, void *pipe)
 {
     printf("Starting Debug receiver thread [%s] ... \n", args);
 
@@ -186,7 +186,7 @@ pull_receiver_thread (void *args, zctx_t *ctx, void *pipe)
 *  attached child threads. In other languages your mileage may vary:
 */
 static void
-listener_thread (void *args, zctx_t *ctx, void *pipe)
+listener_thread (void *args, void *ctx, void *pipe)
 {
     //  Print everything that arrives on pipe
     while (true) {
@@ -269,7 +269,7 @@ int main (int argc, char *argv[])
     }
 
     //  Set the context for the child threads
-    zctx_t *ctx = gw_zmq_init();
+    void *ctx = gw_zmq_init();
 
     //
     // Black Box Pattern impl
@@ -322,13 +322,13 @@ int main (int argc, char *argv[])
     start_gateway_listener(ctx, subscriberAddress, publisherAddress);
 
     if ( testFlag == 1 ) {
-        zthread_fork (ctx, publisher_thread, subscriberAddress);
+        zactor_new ( publisher_thread, subscriberAddress);
     }
 
     // Add a listener thread and start the proxy
     // NOTE: when there are no consumers, messages are simply dropped
     if ( debugFlag == 1 ) {
-        zthread_fork (ctx, subscriber_thread, publisherAddress);
+        zactor_new ( subscriber_thread, publisherAddress);
         //void *listener = zthread_fork (ctx, listener_thread, NULL);
         //zmq_proxy (subscriber, publisher, listener);
     }

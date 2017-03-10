@@ -28,6 +28,7 @@ int
 gw_zmq_destroy( void *ctx )
 {
     //  Tell attached threads to exit
+    zmq_close(ctx);
     return zmq_ctx_term(ctx);
 }
 
@@ -52,18 +53,17 @@ start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddres
     fprintf(stderr,"Starting Gateway Listener \n");
 
     void *subscriber = zmq_socket (ctx, ZMQ_XSUB);
-    int subscriberSocketResult = zmq_bind (subscriber, subscriberAddress);
-    assert( subscriberSocketResult == 0 );
+    assert (zmq_bind (subscriber, subscriberAddress) == 0);
 
     // Start XPUB Proxy -> remote consumers connect here
     void *publisher = zmq_socket (ctx, ZMQ_XPUB);
     zmq_setsockopt (publisher, ZMQ_XPUB_VERBOSE, "1", 1);
-    int publisherBindResult = zmq_bind (publisher, publisherAddress);
-    assert( publisherBindResult == 0 );
+    assert (zmq_bind (publisher, publisherAddress) == 0);
 
-    fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress);
-    // TODO: use actor
-    int fork_result = fork ();
+    void *controller = zmq_socket(ctx, ZMQ_SUB);
+    assert (zmq_connect(controller, DEFAULT_CONTROL) == 0);
 
-    zmq_proxy( subscriber, publisher, NULL);
+    fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s]. \n", subscriberAddress, publisherAddress);
+
+    zmq_proxy_steerable (subscriber, publisher, NULL, controller);
 }

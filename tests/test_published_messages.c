@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <check.h>
 #include "zmq.h"
+#include "pthread.h"
 #include "../src/GwZmqAdaptor.h"
 
 START_TEST(test_zmq_context_lifecycle)
@@ -47,46 +48,46 @@ static void
 mock_gateway_publisher_thread (zsock_t *pipe, void *args)
 {
     printf("Starting Gateway publisher thread [%s] ... \n", args);
-    //An actor function MUST call zsock_signal (pipe) when initialized and MUST listen to pipe and exit on $TERM command.
-    zsock_signal (pipe, 0);
 
     void *ctx = zmq_ctx_new ();
     void *publisher = zmq_socket (ctx, ZMQ_PUB);
-    zmq_connect (publisher, args);
+    assert (zmq_connect (publisher, args) == 0);
 
-    char string [20];
+    //An actor function MUST call zsock_signal (pipe) when initialized
+    // and MUST listen to pipe and exit on $TERM command.
+    zsock_signal (pipe, 0);
+
     int send_response = -100;
-    int i = 0;
-    // bool terminated = false;
-    while (zctx_interrupted == 0) {
-        i = 0;
-        for ( i=0; i<5; i++) {
-            sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
-            send_response = zstr_send(publisher, string);
+    bool terminated = false;
+    while (!terminated) {
+        zmsg_t *msg = zmsg_recv (pipe);
+        if (!msg) {
+            break;              //  Interrupted
+        }
+        char *command = zmsg_popstr (msg);
+
+        //  All actors must handle $TERM in this way
+        if (streq (command, "$TERM")) {
+            terminated = true;
+            break;
+        } else {
+            char *body = zmsg_popstr (msg);
+            fprintf (stderr, " ... sending:%s\n",  body);
+            send_response = zstr_send(publisher, body);
             if (send_response == -1) {
                 break;              //  Interrupted
             }
-            printf(" ... sending:%s\n", string);
         }
+        free (command);
+        zmsg_destroy (&msg);
         zclock_sleep (100);
-
-        // zmsg_t *msg = zmsg_recv (pipe);
-        // if (!msg) {
-        //     break;              //  Interrupted
-        // }
-        // char *command = zmsg_popstr (msg);
-        // //  All actors must handle $TERM in this way
-        //
-        // if (streq (command, "$TERM")) {
-        //     terminated = true;
-        //     break;
-        // }
     }
-    zmq_ctx_destroy(ctx);
+    fprintf(stderr, "%s\n", "Gateway publisher thread terminated.");
+    // zmq_ctx_term(ctx);
 }
 
 /**
-* Counter used to test how  many messages are received by the subscriber
+  Counter used to test how  many messages are received by the subscriber
 */
 int messages_received_counter = 0;
 
@@ -94,49 +95,51 @@ int messages_received_counter = 0;
 
  Starts a listener thread in the background just to print all the messages.
  Use it for debugging purposes.
- This method is activated with the '-d' flag.
-
 */
 static void
 mock_subscriber_thread (zsock_t *pipe, void *args)
 {
     printf("Starting Debug subscriber thread [%s] ... \n", args);
-    //An actor function MUST call zsock_signal (pipe) when initialized and MUST listen to pipe and exit on $TERM command.
+    //An actor function MUST call zsock_signal (pipe) when initialized
+    // and MUST listen to pipe and exit on $TERM command.
     zsock_signal (pipe, 0);
     messages_received_counter = 0;
 
     void *ctx = zmq_ctx_new ();
     void *subscriber = zmq_socket (ctx, ZMQ_SUB);
     zmq_connect (subscriber, args);
-    // subscribe no filter
     zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
-    //zsocket_set_subscribe (subscriber, "");
 
-    // bool terminated = false;
-    while (zctx_interrupted==0) {
+    bool terminated = false;
+    while (!terminated) {
         char *string = zstr_recv (subscriber);
         if (!string) {
             break;              //  Interrupted
         }
         time_t now;
         time(&now);
-        printf("> %s got: [%s]\n", ctime(&now), string);
+
+        char s[1000];
+        struct tm * p = localtime(&now);
+        strftime(s, 1000, "%Y-%m-%dT%H-%M-%SZ", p);
+
+        printf("> At [%s] got: [%s]\n", s, string);
         free (string);
         messages_received_counter ++;
-        fprintf(stderr, "zctx_interrupted=%d", zctx_interrupted);
-        // zclock_sleep(1);
-        // zmsg_t *msg = zmsg_recv (pipe);
-        // if (!msg) {
-        //     break;              //  Interrupted
-        // }
-        // char *command = zmsg_popstr (msg);
-        // //  All actors must handle $TERM in this way
-        // if (streq (command, "$TERM")) {
-        //     terminated = true;
-        //     break;
-        // }
+
+        if (streq(string, "TERM")) {
+            terminated = true;
+            break;
+        }
     }
-    zmq_ctx_destroy(ctx);
+    fprintf(stderr, "%s\n", "Debug subscriber thread terminated.");
+    // zmq_ctx_term(ctx);
+}
+
+void *
+start_listener_thread(void *ctx) {
+    start_gateway_listener(ctx, "ipc:///tmp/nginx_queue_listen", "tcp://127.0.0.1:6001");
+    return 0;
 }
 
 
@@ -145,43 +148,49 @@ START_TEST(test_gateway_listener)
     void *ctx = gw_zmq_init();
     ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
 
-    start_gateway_listener(ctx, "ipc:///tmp/nginx_queue_listen", "tcp://127.0.0.1:6001");
+    pthread_t tid;
+    pthread_create(&tid, NULL, start_listener_thread, ctx);
 
     // simulate a consumer
-    fprintf(stderr,"CREATING Publisher thread....\n");
     char *publisherAddress = "tcp://127.0.0.1:6001";
     zactor_t *pipe2 = zactor_new (mock_subscriber_thread, publisherAddress);
     ck_assert_msg(pipe2 != NULL, "Subscriber Thread should have been created. ");
 
-    fprintf(stderr,"Publisher thread CREATED....");
-
     zclock_sleep (100);
 
     // simulate gateway
-    fprintf(stderr,"CREATING Subscriber thread....\n");
     char *subscriberAddress = "ipc:///tmp/nginx_queue_listen";
     zactor_t *pipe = zactor_new( mock_gateway_publisher_thread, subscriberAddress);
     ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
-    fprintf(stderr,"Subscriber thread CREATED....");
 
-    // wait for some messages to be passed
-    fprintf(stderr, "AICIIIIIIIIII");
-    zclock_sleep(400);
-    fprintf(stderr, "AICIIIIIIIIII DOIDDDDDDDD");
-    // TODO: terminate actors
-    zactor_destroy (&pipe2);
+    void *controller = zmq_socket(ctx, ZMQ_SUB);
+    assert (zmq_bind (controller, DEFAULT_CONTROL) == 0);
+
+    char string[20];
+    for (int i=0; i<5; i++) {
+        sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
+        zstr_sendx (pipe, "ECHO", string, NULL);
+    }
+    zstr_sendx(pipe, "ECHO", "TERM"); // terminate pipe2
+
+    // terminate actors
     zactor_destroy (&pipe);
-
-    zctx_interrupted = 1;
-
+    zactor_destroy (&pipe2);
 
     char s_counter[100] = "";
-    int expected_min_messages = 15;
-    sprintf(s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
-    ck_assert_msg( messages_received_counter >= expected_min_messages, s_counter);
+    int expected_min_messages = 5;
+    sprintf (s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
+    ck_assert_msg (messages_received_counter >= expected_min_messages, s_counter);
 
-    gw_zmq_destroy( ctx );
-    ck_assert_msg(ctx == NULL, "ZMQ Context should be destroyed. ");
+    // terminate the proxy
+
+    // assert (zmq_send (controller, "TERMINATE", 9, 0) == 0);
+    assert (pthread_cancel(tid) == 0);
+
+    // gw_zmq_destroy(ctx);
+    // ck_assert_msg(ctx == NULL, "ZMQ Context should be destroyed. ");
+
+    fprintf(stderr, "END TEST");
 }
 END_TEST
 

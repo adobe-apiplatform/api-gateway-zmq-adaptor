@@ -22,6 +22,11 @@
 */
 #define DEFAULT_PUSH "ipc:///tmp/nginx_queue_push"
 
+/**
+* The address of the control socket
+*/
+#define DEFAULT_CONTROL "inproc://proxy-controller"
+
 #include "czmq.h"
 
 void *

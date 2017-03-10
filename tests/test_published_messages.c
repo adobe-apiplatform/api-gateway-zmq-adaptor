@@ -26,15 +26,13 @@ START_TEST(test_zmq_context_lifecycle)
     // 3. start a consumer on XPUB
     // 4. test that the messages sent by the publishers are available on the XPUB socket
 
-    void *ctx = gw_zmq_init();
-    ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
+    void *ctx = gw_zmq_init ();
+    ck_assert_msg (ctx != NULL, "ZMQ Context can't be null. ");
 
-    int destroyed = gw_zmq_destroy( ctx );
-    char s_counter[100] = "";
-    sprintf(s_counter, "ZMQ Context should be destroyed but returned value was: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
-    ck_assert_msg( destroyed == 0, s_counter);
-    // ck_assert_msg(destroyed == 0, "ZMQ Context should be destroyed. ");
-
+    int destroyed = gw_zmq_destroy (ctx);
+    char msg[100] = "";
+    sprintf (msg, "ZMQ Context should be destroyed but returned value was: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
+    ck_assert_msg (destroyed == 0, msg);
 }
 END_TEST
 
@@ -83,7 +81,8 @@ mock_gateway_publisher_thread (zsock_t *pipe, void *args)
         zclock_sleep (100);
     }
     fprintf(stderr, "%s\n", "Gateway publisher thread terminated.");
-    // zmq_ctx_term(ctx);
+    assert(zmq_close (publisher)==0);
+    zmq_ctx_term(ctx);
 }
 
 /**
@@ -131,15 +130,17 @@ mock_subscriber_thread (zsock_t *pipe, void *args)
             terminated = true;
             break;
         }
+        zclock_sleep (100);
     }
     fprintf(stderr, "%s\n", "Debug subscriber thread terminated.");
-    // zmq_ctx_term(ctx);
+    assert(zmq_close (subscriber)==0);
+    zmq_ctx_term(ctx);
 }
 
-void *
-start_listener_thread(void *ctx) {
+void
+server_task (void *ctx)
+{
     start_gateway_listener(ctx, "ipc:///tmp/nginx_queue_listen", "tcp://127.0.0.1:6001");
-    return 0;
 }
 
 
@@ -148,8 +149,7 @@ START_TEST(test_gateway_listener)
     void *ctx = gw_zmq_init();
     ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
 
-    pthread_t tid;
-    pthread_create(&tid, NULL, start_listener_thread, ctx);
+    void *thread = zmq_threadstart(&server_task, ctx);
 
     // simulate a consumer
     char *publisherAddress = "tcp://127.0.0.1:6001";
@@ -162,9 +162,6 @@ START_TEST(test_gateway_listener)
     char *subscriberAddress = "ipc:///tmp/nginx_queue_listen";
     zactor_t *pipe = zactor_new( mock_gateway_publisher_thread, subscriberAddress);
     ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
-
-    void *controller = zmq_socket(ctx, ZMQ_SUB);
-    assert (zmq_bind (controller, DEFAULT_CONTROL) == 0);
 
     char string[20];
     for (int i=0; i<5; i++) {
@@ -182,15 +179,22 @@ START_TEST(test_gateway_listener)
     sprintf (s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
     ck_assert_msg (messages_received_counter >= expected_min_messages, s_counter);
 
-    // terminate the proxy
+    // terminate the proxy via the controller
+    void *controller = zmq_socket(ctx, ZMQ_PUB);
+    assert (zmq_bind (controller, DEFAULT_CONTROL) == 0);
+    int destroyed = zmq_send (controller, "TERMINATE", 9, 0);
+    char msg[100] = "";
+    sprintf (msg, "zmq_proxy could not be terminated: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
+    ck_assert_msg (destroyed == 9, msg);
+    assert(zmq_close (controller)==0);
 
-    // assert (zmq_send (controller, "TERMINATE", 9, 0) == 0);
-    assert (pthread_cancel(tid) == 0);
+    zmq_threadclose (thread);
 
-    // gw_zmq_destroy(ctx);
-    // ck_assert_msg(ctx == NULL, "ZMQ Context should be destroyed. ");
+    zclock_sleep (100);
 
-    fprintf(stderr, "END TEST");
+    destroyed = gw_zmq_destroy (ctx);
+    sprintf (msg, "ZMQ Context should be destroyed but returned value was: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
+    ck_assert_msg (destroyed == 0, msg);
 }
 END_TEST
 

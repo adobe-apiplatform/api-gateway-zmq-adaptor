@@ -28,7 +28,6 @@ int
 gw_zmq_destroy( void *ctx )
 {
     //  Tell attached threads to exit
-    zmq_close(ctx);
     return zmq_ctx_term(ctx);
 }
 
@@ -50,7 +49,7 @@ and proxying them to a local IP address on XPUB . Remote consumers should connec
 void
 start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddress)
 {
-    fprintf(stderr,"Starting Gateway Listener \n");
+    fprintf(stderr, "%s\n", "Starting Gateway Listener");
 
     void *subscriber = zmq_socket (ctx, ZMQ_XSUB);
     assert (zmq_bind (subscriber, subscriberAddress) == 0);
@@ -61,9 +60,18 @@ start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddres
     assert (zmq_bind (publisher, publisherAddress) == 0);
 
     void *controller = zmq_socket(ctx, ZMQ_SUB);
+    zmq_setsockopt (controller, ZMQ_SUBSCRIBE, "", 0);
     assert (zmq_connect(controller, DEFAULT_CONTROL) == 0);
 
     fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s]. \n", subscriberAddress, publisherAddress);
 
     zmq_proxy_steerable (subscriber, publisher, NULL, controller);
+
+    fprintf(stderr, "%s\n", "XPUB->XSUB Proxy stopped.");
+
+    assert(zmq_close (subscriber)==0);
+    assert(zmq_close (publisher)==0);
+    assert(zmq_close (controller)==0);
+
+    fprintf(stderr, "%s\n", "Gateway Listener has stopped.");
 }

@@ -199,39 +199,64 @@ START_TEST(test_gateway_listener)
 END_TEST
 
 
+void
+server_task_with_abstract_socket (void *ctx)
+{
+    start_gateway_listener(ctx, "ipc://@nginx_queue_listen", "tcp://127.0.0.1:6001");
+}
+
 START_TEST(test_gateway_listener_over_abstract_socket)
 {
-    void *ctx = gw_zmq_init();
-    ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
 
-    start_gateway_listener(ctx, "ipc://@nginx_queue_listen", "tcp://127.0.0.1:6001");
+  void *ctx = gw_zmq_init();
+  ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
 
-    // simulate a consumer
-    char *publisherAddress = "tcp://127.0.0.1:6001";
-    zactor_t *pipe2 = zactor_new ( mock_subscriber_thread, publisherAddress);
-    ck_assert_msg(pipe2 != NULL, "Subscriber Thread should have been created. ");
+  void *thread = zmq_threadstart(&server_task_with_abstract_socket, ctx);
 
-    zclock_sleep (100);
+  // simulate a consumer
+  char *publisherAddress = "tcp://127.0.0.1:6001";
+  zactor_t *pipe2 = zactor_new (mock_subscriber_thread, publisherAddress);
+  ck_assert_msg(pipe2 != NULL, "Subscriber Thread should have been created. ");
 
-    // simulate gateway
-//    char *subscriberAddress = "ipc://\\0nginx_queue_listen";
-    char *subscriberAddress = "ipc://@nginx_queue_listen";
-    zactor_t *pipe = zactor_new ( mock_gateway_publisher_thread, subscriberAddress);
-    ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
+  zclock_sleep (100);
 
-    // wait for some messages to be passed
-    zclock_sleep(400);
-    zctx_interrupted = true;
+  // simulate gateway
+  char *subscriberAddress = "ipc://@nginx_queue_listen";
+  zactor_t *pipe = zactor_new( mock_gateway_publisher_thread, subscriberAddress);
+  ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
 
-    char s_counter[100] = "";
-    int expected_min_messages = 15;
-    sprintf(s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
-    ck_assert_msg( messages_received_counter >= expected_min_messages, s_counter);
+  char string[20];
+  for (int i=0; i<5; i++) {
+      sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
+      zstr_sendx (pipe, "ECHO", string, NULL);
+  }
+  zstr_sendx(pipe, "ECHO", "TERM"); // terminate pipe2
 
-    zactor_destroy (&pipe2);
-    zactor_destroy (&pipe);
-    gw_zmq_destroy( ctx );
-    ck_assert_msg(ctx == NULL, "ZMQ Context should be destroyed. ");
+  // terminate actors
+  zactor_destroy (&pipe);
+  zactor_destroy (&pipe2);
+
+  char s_counter[100] = "";
+  int expected_min_messages = 5;
+  sprintf (s_counter, "The consumer should have received at least [%d] messages, but got [%d]", expected_min_messages, messages_received_counter);
+  ck_assert_msg (messages_received_counter >= expected_min_messages, s_counter);
+
+  // terminate the proxy via the controller
+  void *controller = zmq_socket(ctx, ZMQ_PUB);
+  assert (zmq_bind (controller, DEFAULT_CONTROL) == 0);
+  int destroyed = zmq_send (controller, "TERMINATE", 9, 0);
+  char msg[100] = "";
+  sprintf (msg, "zmq_proxy could not be terminated: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
+  ck_assert_msg (destroyed == 9, msg);
+  assert(zmq_close (controller)==0);
+
+  zmq_threadclose (thread);
+
+  zclock_sleep (100);
+
+  destroyed = gw_zmq_destroy (ctx);
+  sprintf (msg, "ZMQ Context should be destroyed but returned value was: %d, errno=%s", destroyed, zmq_strerror (zmq_errno ()) );
+  ck_assert_msg (destroyed == 0, msg);
 }
 END_TEST
 
@@ -249,7 +274,7 @@ Suite * adaptor_suite(void)
 
     tcase_add_test(tc_core, test_zmq_context_lifecycle);
     tcase_add_test(tc_core, test_gateway_listener);
-    // tcase_add_test(tc_core, test_gateway_listener_over_abstract_socket);
+    tcase_add_test(tc_core, test_gateway_listener_over_abstract_socket);
     suite_add_tcase(s, tc_core);
 
     return s;

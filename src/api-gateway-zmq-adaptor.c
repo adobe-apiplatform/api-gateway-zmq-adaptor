@@ -27,19 +27,24 @@
 * This method is activated with the '-d' flag.
 *
 */
-static void
-subscriber_thread (void *args, void *ctx, void *pipe)
+void
+subscriber_thread (zsock_t *pipe, void *args)
 {
-    fprintf(stderr, "Starting Debug subscriber thread [%s] ... \n", args);
-    void *subscriber = zsocket_new (ctx, ZMQ_SUB);
+    //fprintf(stderr, "Starting Debug subscriber thread [%s] ... \n", args);
+    void *ctx = zmq_ctx_new ();
+    void *subscriber = zmq_socket (ctx, ZMQ_SUB);
 
-    zsocket_set_tcp_keepalive_idle( subscriber, 300 );
-    zsocket_set_tcp_keepalive_cnt( subscriber, 300 );
-    zsocket_set_tcp_keepalive_intvl( subscriber, 300 );
+    zsock_set_tcp_keepalive_idle( subscriber, 300 );
+    zsock_set_tcp_keepalive_cnt( subscriber, 300 );
+    zsock_set_tcp_keepalive_intvl( subscriber, 300 );
 
-    zsocket_connect (subscriber, "%s", args);
+    assert (zmq_connect (subscriber, args) == 0);
 
-    zsocket_set_subscribe (subscriber, "");
+    //An actor function MUST call zsock_signal (pipe) when initialized
+    // and MUST listen to pipe and exit on $TERM command.
+    zsock_signal (pipe, 0);
+
+    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
 
 
     void *watch;
@@ -52,20 +57,25 @@ subscriber_thread (void *args, void *ctx, void *pipe)
     int messages_received_counter = 0;
     int messages_received_latency = 0;
 
-    while (!zctx_interrupted) {
+    bool terminated = false;
+    while (!terminated) {
 
         watch = zmq_stopwatch_start ();
         char *string = zstr_recv (subscriber);
         if (!string) {
+            fprintf(stderr, "%s\n", "Invalid string received.");
             break;              //  Interrupted
         }
         elapsed_since_last_message = zmq_stopwatch_stop (watch);
 
         watch = zmq_stopwatch_start ();
-//        time_t now;
-//        time(&now);
-        //printf("> %s got: [%s]\n", ctime(&now), string);
-        free (string);
+
+        // time_t now;
+        // time(&now);
+        // char s[1000];
+        // struct tm * p = localtime(&now);
+        // strftime(s, 1000, "%Y-%m-%dT%H-%M-%SZ", p);
+        // printf("> At [%s] got: [%s]\n", s, string);
 
         messages_received_counter ++;
         elapsed = zmq_stopwatch_stop (watch);
@@ -78,14 +88,26 @@ subscriber_thread (void *args, void *ctx, void *pipe)
         elapsed_counter += elapsed + elapsed_since_last_message;
         if ( elapsed_counter >= 1000*1000 ) {
             fprintf(stderr, " %d messages processed in %lu [ms] with latency min=%.4f[ms], max=%.4f[ms], avg=%.4f[ms]\n", messages_received_counter, elapsed_counter/1000, min_latency/1000, max_latency/1000, avg_latency/1000);
+            fprintf(stderr, "Last message received: %s\n", string);
             min_latency = DBL_MAX;
             max_latency = -1;
             avg_latency = -1;
             elapsed_counter = 0;
+            elapsed_since_last_message = 0;
             messages_received_counter = 0;
         }
+
+        if (streq(string, "PUB-499999")) {
+            terminated = true;
+            fprintf(stderr, " %d messages processed in %lu [ms] with latency min=%.4f[ms], max=%.4f[ms], avg=%.4f[ms]\n", messages_received_counter, elapsed_counter/1000, min_latency/1000, max_latency/1000, avg_latency/1000);
+            fprintf(stderr, "Last message received: %s\n", string);
+            break;
+        }
+        free (string);
     }
-    zsocket_destroy (ctx, subscriber);
+    fprintf(stderr, "%s\n", "Debug subscriber thread terminated.");
+    assert(zmq_close (subscriber)==0);
+    zmq_ctx_term(ctx);
 }
 
 /**
@@ -94,111 +116,47 @@ subscriber_thread (void *args, void *ctx, void *pipe)
 *  The publisher sends random messages starting with A-J:
 *
 */
-static void
-publisher_thread (void *args, void *ctx, void *pipe)
+void
+testing_thread (zsock_t *pipe, void *args)
 {
-    fprintf(stderr, "Starting Test publisher thread [%s] ... \n", args);
-    void *publisher = zsocket_new (ctx, ZMQ_PUB);
-    int socket_bound = zsocket_connect (publisher, "%s", args);
+    //fprintf(stderr, "Starting Test Generator thread [%s] ... \n", args);
+    //An actor function MUST call zsock_signal (pipe) when initialized
+    // and MUST listen to pipe and exit on $TERM command.
+    void *ctx = zmq_ctx_new ();
+    void *publisher = zmq_socket (ctx, ZMQ_PUB);
+    assert (zmq_connect (publisher, args) == 0);
 
-    char string [20];
-    int send_response = -100;
-    int i = 0;
-    while (!zctx_interrupted) {
-        i = 0;
-        for ( i=0; i<1; i++) {
-            sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
-            send_response = zstr_send(publisher, string);
-            if (send_response == -1) {
-                break;              //  Interrupted
-            }
-            printf(" ... sending:%s\n", string);
+    zsock_signal (pipe, 0);
+
+    zclock_sleep(500);
+
+    char string[20];
+    int pause_idx = 1;
+    for (int i=0; i<=500000; i++) {
+        //sprintf (string, "PUB-%c-%05d", randof (10) + 'A', randof (100000));
+        sprintf (string, "PUB-%06d", i);
+        if (i == pause_idx * 1000) {
+          // fprintf(stderr, "Sent %d messages\n", i);
+          zclock_sleep(10);
+          pause_idx++;
         }
-        zclock_sleep (1000);
-    }
-}
-
-/**
-*
-*  This method is activated with '-r' option and it's used for testing purposes only
-*  The publisher sends random messages starting with SEND-
-*
-*/
-
-static void
-publisher_thread_for_black_box (void *args, void *ctx, void *pipe)
-{
-    printf("Starting Test publisher thread for BlackBox [%s] ... \n", args);
-    void *publisher = zsocket_new (ctx, ZMQ_PUB);
-    int socket_bound = zsocket_connect (publisher, "%s", args);
-    int i = 0;
-    while (!zctx_interrupted) {
-        char string [20];
-        int send_response = -100;
-        i = 0;
-        for ( i=0; i<1; i++) {
-            sprintf (string, "SEND-%05d", randof (100000));
-            send_response = zstr_send(publisher, string);
-            if (send_response == -1) {
-                break;              //  Interrupted
-            }
-            printf(" ... sending:%s\n", string);
-        }
-        zclock_sleep (1000);
-    }
-}
-
-/**
-*
-*  This method runs with the debug flag '-d'. In order to see the messages you need at least a consumer.
-*  PULLS from the PUSH socket
-*/
-static void
-pull_receiver_thread (void *args, void *ctx, void *pipe)
-{
-    printf("Starting Debug receiver thread [%s] ... \n", args);
-
-    void *receiver = zsocket_new (ctx, ZMQ_PULL);
-    int receiverConnectResult = zsocket_connect (receiver, "%s", args);
-    assert( receiverConnectResult >= 0 );
-
-    while (!zctx_interrupted) {
-        char *string = zstr_recv (receiver);
-        if (!string) {
-            puts(" ... Debug receiver thread interrupted !");
+        int send_response = zstr_send(publisher, string);
+        if (send_response == -1) {
             break;              //  Interrupted
         }
-        time_t now;
-        time(&now);
-        printf("> %s receiver got: %s\n", ctime(&now), string);
-        zstr_send(pipe, string);
-        free (string);
-        //zclock_sleep(1);
+        //fprintf(" ... sending:%s\n", string);
     }
-    zsocket_destroy (ctx, receiver);
+    fprintf (stderr, "%s\n", "Sending TERM signal ...");
+    sprintf (string, "%s", "TERM");
+    zstr_send (publisher, string);
 
+    zclock_sleep (20000);
+
+    fprintf (stderr, "%s\n", "Test Generator thread terminated.");
+    assert (zmq_close (publisher)==0);
+    zmq_ctx_term(ctx);
 }
 
-/**
-*
-*  The listener receives all messages flowing through the proxy, on its
-*  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
-*  attached child threads. In other languages your mileage may vary:
-*/
-static void
-listener_thread (void *args, void *ctx, void *pipe)
-{
-    //  Print everything that arrives on pipe
-    while (true) {
-        zframe_t *frame = zframe_recv (pipe);
-        if (!frame) {
-            puts("empty frame. stopping the listener ...");
-            break;              //  Interrupted
-        }
-        zframe_print (frame, NULL);
-        zframe_destroy (&frame);
-    }
-}
 
 /**
 *  .split main thread
@@ -232,7 +190,7 @@ int main (int argc, char *argv[])
     int testFlag = 0;
     int testBlackBoxFlag = 0;
 
-    while ( (c = getopt(argc, argv, "b:p:l:u:dtr") ) != -1)
+    while ( (c = getopt (argc, argv, "b:p:l:u:dtr") ) != -1)
     {
         switch (c)
         {
@@ -250,64 +208,26 @@ int main (int argc, char *argv[])
                 break;
             case 'd':
                 debugFlag = 1;
-                fprintf(stderr,"RUNNING IN DEBUGGING MODE\n");
+                fprintf (stderr,"RUNNING IN DEBUGGING MODE\n");
                 break;
             case 't':
                 debugFlag = 1;
                 testFlag = 1;
-                fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for XPUB -> XSUB\n");
+                fprintf (stderr,"RUNNING IN TEST MODE & DEBUG MODE for XPUB -> XSUB\n");
                 break;
             case 'r':
                 debugFlag = 1;
                 testBlackBoxFlag = 1;
-                fprintf(stderr,"RUNNING IN TEST MODE & DEBUG MODE for SUB -> PUSH\n");
+                fprintf (stderr,"RUNNING IN TEST MODE & DEBUG MODE for SUB -> PUSH\n");
                 break;
             case '?':
-                fprintf(stderr,"Unrecognized option!\n");
+                fprintf (stderr,"Unrecognized option!\n");
                 break;
         }
     }
 
     //  Set the context for the child threads
-    void *ctx = gw_zmq_init();
-
-    //
-    // Black Box Pattern impl
-    // @see http://zguide.zeromq.org/page:all#header-119
-    // -------------------------------------
-    //     SUB        ->      PUSH
-    //  public Addr   ->    internal Addr
-    //   CONNECT      ->      BIND
-    // -------------------------------------
-    //
-
-//    void *listenerSocket = zsocket_new(ctx, ZMQ_SUB);
-//    int listenerSocketResult = -1;
-//    if ( testBlackBoxFlag == 0 ) {
-//        listenerSocketResult = zsocket_connect(listenerSocket, "%s", listenerAddress);
-//    } else {
-//        listenerSocketResult = zsocket_bind(listenerSocket, "%s", listenerAddress);
-//    }
-//    assert( listenerSocketResult >= 0 );
-//
-//    zsocket_set_subscribe (listenerSocket, ""); // NOTE: Don't miss this directive, otherwise the SUB doesn't get anything
-//
-//    void *pushSocket = zsocket_new(ctx, ZMQ_PUSH);
-//    int pushSocketResult = zsocket_bind(pushSocket, "%s", pushAddress);
-//    assert( pushSocketResult >= 0 );
-//
-//
-//    fprintf(stderr,"\nStarting SUB->PUSH Proxy [%s] -> [%s] \n", listenerAddress, pushAddress );
-//    zproxy_t *sub_push_thread = zproxy_new(ctx, listenerSocket, pushSocket);
-//
-//    if ( testBlackBoxFlag == 1 ) {
-//        zthread_fork (ctx, publisher_thread_for_black_box, listenerAddress);
-//    }
-//
-//    if ( debugFlag == 1 ) {
-//        // you have to have at least 1 socket to PULL to see the messages
-//        zthread_fork (ctx, pull_receiver_thread, pushAddress);
-//    }
+    void *ctx = gw_zmq_init ();
 
     //
     // Espresso Pattern impl
@@ -318,31 +238,30 @@ int main (int argc, char *argv[])
     //   BIND           ->       BIND
     // ---------------------------------------
     //
-
-    start_gateway_listener(ctx, subscriberAddress, publisherAddress);
-
-    if ( testFlag == 1 ) {
-        zactor_new ( publisher_thread, subscriberAddress);
+    zactor_t *test_pipe = NULL;
+    if (testFlag == 1) {
+        test_pipe = zactor_new (testing_thread, subscriberAddress);
     }
 
     // Add a listener thread and start the proxy
     // NOTE: when there are no consumers, messages are simply dropped
-    if ( debugFlag == 1 ) {
-        zactor_new ( subscriber_thread, publisherAddress);
-        //void *listener = zthread_fork (ctx, listener_thread, NULL);
-        //zmq_proxy (subscriber, publisher, listener);
-    }
-    //else {
-    //    zmq_proxy (subscriber, publisher, NULL);
-    //}
-
-    // just making sure the current thread doesn't exit
-    while( !zctx_interrupted ) {
-        zclock_sleep(500);
+    zactor_t *debug_pipe = NULL;
+    if (debugFlag == 1) {
+        debug_pipe = zactor_new (subscriber_thread, publisherAddress);
     }
 
-    fprintf(stderr," ... interrupted");
+    start_gateway_listener (ctx, subscriberAddress, publisherAddress);
+
+    if (debug_pipe) {
+        zactor_destroy (&debug_pipe);
+    }
+
+    if (test_pipe) {
+      zactor_destroy (&test_pipe);
+    }
+
+    fprintf (stderr, " ... interrupted\n");
     //  Tell attached threads to exit
-    gw_zmq_destroy( &ctx );
+    gw_zmq_destroy (ctx);
     return 0;
 }

@@ -45,7 +45,7 @@ test utility methods
 static void
 mock_gateway_publisher_thread (zsock_t *pipe, void *args)
 {
-    printf("Starting Gateway publisher thread [%s] ... \n", args);
+    //printf("Starting Gateway publisher thread [%s] ... \n", args);
 
     void *ctx = zmq_ctx_new ();
     void *publisher = zmq_socket (ctx, ZMQ_PUB);
@@ -98,7 +98,7 @@ int messages_received_counter = 0;
 static void
 mock_subscriber_thread (zsock_t *pipe, void *args)
 {
-    printf("Starting Debug subscriber thread [%s] ... \n", args);
+    //printf("Starting Debug subscriber thread [%s] ... \n", args);
     //An actor function MUST call zsock_signal (pipe) when initialized
     // and MUST listen to pipe and exit on $TERM command.
     zsock_signal (pipe, 0);
@@ -122,8 +122,7 @@ mock_subscriber_thread (zsock_t *pipe, void *args)
         struct tm * p = localtime(&now);
         strftime(s, 1000, "%Y-%m-%dT%H-%M-%SZ", p);
 
-        printf("> At [%s] got: [%s]\n", s, string);
-        free (string);
+        fprintf(stderr, "> At [%s] got: [%s]\n", s, string);
         messages_received_counter ++;
 
         if (streq(string, "TERM")) {
@@ -131,6 +130,7 @@ mock_subscriber_thread (zsock_t *pipe, void *args)
             break;
         }
         zclock_sleep (100);
+        free (string);
     }
     fprintf(stderr, "%s\n", "Debug subscriber thread terminated.");
     assert(zmq_close (subscriber)==0);
@@ -172,6 +172,7 @@ START_TEST(test_gateway_listener)
 
     // terminate actors
     zactor_destroy (&pipe);
+
     zactor_destroy (&pipe2);
 
     char s_counter[100] = "";

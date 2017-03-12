@@ -56,7 +56,7 @@ start_gateway_listener(void *ctx, char *subscriberAddress, char *publisherAddres
 
     // Start XPUB Proxy -> remote consumers connect here
     void *publisher = zmq_socket (ctx, ZMQ_XPUB);
-    zmq_setsockopt (publisher, ZMQ_XPUB_VERBOSE, "1", 1);
+    zmq_setsockopt (publisher, ZMQ_XPUB_VERBOSE, "0", 1);
     assert (zmq_bind (publisher, publisherAddress) == 0);
 
     void *controller = zmq_socket(ctx, ZMQ_SUB);

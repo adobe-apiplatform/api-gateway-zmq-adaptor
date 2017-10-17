@@ -21,8 +21,8 @@ process-resources:
 	mkdir -p $(BUILD_DIR)/classes
 
 install: process-resources
-	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o
-	gcc $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o src/api-gateway-zmq-adaptor.c -o $(BUILD_DIR)/api-gateway-zmq-adaptor
+	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o -lpthread
+	gcc $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o src/api-gateway-zmq-adaptor.c -o $(BUILD_DIR)/api-gateway-zmq-adaptor -lpthread
 	cp $(BUILD_DIR)/api-gateway-zmq-adaptor $(PREFIX)/api-gateway-zmq-adaptor
 
 run:

@@ -12,9 +12,9 @@ ENV ZMQ_ADAPTOR_VERSION 0.1.1
 
 RUN apk update \
     && apk add \
-           gcc tar libtool zlib make musl-dev openssl-dev g++ zlib-dev curl \
-    && echo " ... adding ZMQ and CZMQ" \
-         && curl -L http://download.zeromq.org/zeromq-${ZMQ_VERSION}.tar.gz -o /tmp/zeromq.tar.gz \
+           gcc tar libtool zlib make musl-dev openssl-dev g++ zlib-dev curl
+RUN echo " ... adding ZMQ and CZMQ" \
+         && curl -L https://s3.amazonaws.com/adobe-cloudops-apip-installers-ue1/3rd-party/zeromq-${ZMQ_VERSION}.tar.gz -o /tmp/zeromq.tar.gz \
          && cd /tmp/ \
          && tar -xf /tmp/zeromq.tar.gz \
          && cd /tmp/zeromq*/ \
@@ -23,7 +23,7 @@ RUN apk update \
                         --mandir=/usr/share/man \
                         --infodir=/usr/share/info \
          && make && make install \
-         && curl -L http://download.zeromq.org/czmq-${CZMQ_VERSION}.tar.gz -o /tmp/czmq.tar.gz \
+         && curl -L https://s3.amazonaws.com/adobe-cloudops-apip-installers-ue1/3rd-party/czmq-${CZMQ_VERSION}.tar.gz -o /tmp/czmq.tar.gz \
          && cd /tmp/ \
          && tar -xf /tmp/czmq.tar.gz \
          && cd /tmp/czmq*/ \
@@ -33,20 +33,20 @@ RUN apk update \
                         --infodir=/usr/share/info \
          && make && make install \
          && rm -rf /tmp/zeromq* && rm -rf /tmp/czmq* \
-         && rm -rf /var/cache/apk/* \
-    && echo " ... installing api-gateway-zmq-adaptor" \
-         && curl -L https://github.com/adobe-apiplatform/api-gateway-zmq-adaptor/archive/${ZMQ_ADAPTOR_VERSION}.tar.gz -o /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION} \
+         && rm -rf /var/cache/apk/* 
+RUN echo " ... installing api-gateway-zmq-adaptor" \
+         && curl -L https://s3.amazonaws.com/adobe-cloudops-apip-installers-ue1/3rd-party/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}.tar.gz -o /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}.tar.gz \
          && apk update \
          && apk add check-dev \
          && cd /tmp/ \
-         && tar -xf /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION} \
+         && tar -xf /tmp/api-gateway-zmq-adaptor-${ZMQ_ADAPTOR_VERSION}.tar.gz \
          && cd /tmp/api-gateway-zmq-adaptor-* \
          && make test \
          && mkdir -p /usr/local/sbin \
          && PREFIX=/usr/local/sbin make install \
          && rm -rf /tmp/api-gateway-zmq-adaptor-* \
-         && apk del check-dev \
-    && apk del gcc tar libtool make musl-dev openssl-dev g++ zlib-dev curl \
+         && apk del check-dev 
+RUN apk del gcc tar libtool make musl-dev openssl-dev g++ zlib-dev curl \
     && rm -rf /var/cache/apk/*
 
 RUN apk update \

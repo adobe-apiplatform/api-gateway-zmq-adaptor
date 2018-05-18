@@ -17,7 +17,7 @@
 #include "czmq.h"
 #include "time.h"
 
-void*
+char*
 timestamp() {
     time_t rawtime;
 
@@ -153,11 +153,13 @@ monitor_generic_socket(void* ctx, const char* endpoint) {
 static void*
 monitor_xpub_socket(void *ctx) {
     monitor_generic_socket(ctx, DEFAULT_INPROC_XPUB_MONITOR_ENDPOINT);
+    return NULL;
 }
 
 static void*
 monitor_xsub_socket(void *ctx) {
     monitor_generic_socket(ctx, DEFAULT_INPROC_XSUB_MONITOR_ENDPOINT);
+    return NULL;
 }
 
 /*
@@ -192,6 +194,7 @@ start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddr
 
     fprintf(stderr, "[%s] - Starting XPUB->XSUB Proxy [%s] -> [%s] \n", timestamp(), subscriberAddress, publisherAddress);
     zproxy_t *xpub_xsub_thread = zproxy_new(ctx, subscriber, publisher);
+    assert( xpub_xsub_thread );
 
     if(!debugFlag) {
         return;

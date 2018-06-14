@@ -17,6 +17,23 @@
 #include "czmq.h"
 #include "time.h"
 
+char*
+timestamp() {
+    time_t rawtime;
+
+    time(&rawtime);
+
+    struct tm* timeinfo;
+
+    timeinfo = localtime(&rawtime);
+
+    char* result = asctime(timeinfo);
+
+    result[strlen(result) - 1] = 0;
+
+    return result;
+}
+
 zctx_t *
 gw_zmq_init()
 {
@@ -32,13 +49,126 @@ gw_zmq_destroy( zctx_t **ctx )
     zctx_destroy(ctx);
 }
 
+static int
+read_message(void* socket, zmq_event_t* event, char* endpoint) {
+    zmq_msg_t binary;
+
+    zmq_msg_init(&binary);
+
+    int result = zmq_msg_recv(&binary, socket, 0);
+
+    if (result == -1) {
+        return -1;
+    }
+
+    assert(zmq_msg_more(&binary) != 0);
+
+    zmq_msg_t address;
+
+    zmq_msg_init(&address);
+    result = zmq_msg_recv(&address, socket, 0);
+
+    if (result == -1) {
+        return -1;
+    }
+
+    assert(zmq_msg_more(&address) == 0);
+
+    const char* binary_data = (char*)zmq_msg_data(&binary);
+
+    memcpy(&(event->event), binary_data, sizeof(event->event));
+    memcpy(&(event->value), binary_data + sizeof(event->event), sizeof(event->value));
+
+    const size_t len = zmq_msg_size(&address);
+
+    endpoint = memcpy(endpoint, zmq_msg_data(&address), len);
+
+    *(endpoint + len) = 0;
+
+    return 0;
+}
+
+static void*
+monitor_generic_socket(void* ctx, const char* endpoint) {
+    fprintf(stderr, "[%s] - Monitoring endpoint %s...\n", timestamp(), endpoint);
+
+    void* socket = zsocket_new(ctx, ZMQ_PAIR);
+
+    assert(socket);
+    fprintf(stderr, "[%s] - Created PAIR socket for endpoint %s\n", timestamp(), endpoint);
+
+    int result = zmq_connect(socket, endpoint);
+
+    assert(result == 0);
+    fprintf(stderr, "[%s] - Connected PAIR socket to endpoint %s\n", timestamp(), endpoint);
+
+    zmq_event_t event;
+    static char address[512];
+
+    while(!read_message(socket, &event, address)) {
+        int code = event.event;
+        int value = event.value;
+
+        switch(code) {
+            case ZMQ_EVENT_CONNECTED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_CONNECTED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_CONNECT_DELAYED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_CONNECT_DELAYED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_CONNECT_RETRIED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_CONNECT_RETRIED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_LISTENING:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_LISTENING event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_BIND_FAILED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_BIND_FAILED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_ACCEPTED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_ACCEPTED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_ACCEPT_FAILED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_ACCEPT_FAILED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_CLOSED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_CLOSED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_CLOSE_FAILED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_CLOSE_FAILED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            case ZMQ_EVENT_DISCONNECTED:
+                fprintf(stderr, "[%s] - Received ZMQ_EVENT_DISCONNECTED event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+                break;
+            default:
+                fprintf(stderr, "[%s] - Received unknown ZMQ event %d with value=%d for address=%s\n", timestamp(), code, value, address);
+        }
+    }
+
+    zmq_close(socket);
+
+    return 0;
+}
+
+static void*
+monitor_xpub_socket(void *ctx) {
+    monitor_generic_socket(ctx, DEFAULT_INPROC_XPUB_MONITOR_ENDPOINT);
+    return NULL;
+}
+
+static void*
+monitor_xsub_socket(void *ctx) {
+    monitor_generic_socket(ctx, DEFAULT_INPROC_XSUB_MONITOR_ENDPOINT);
+    return NULL;
+}
+
 /*
 
 Espresso Pattern impl
 @see http://zguide.zeromq.org/page:all#header-116
 --------------------------------------
    XPUB           ->       XSUB
-  public Addr     ->    internal Addr
+  public address     ->    internal address
    BIND           ->       BIND
 ---------------------------------------
 
@@ -48,9 +178,9 @@ and proxying them to a local IP address on XPUB . Remote consumers should connec
 */
 
 void
-start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddress)
+start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddress, int debugFlag)
 {
-    fprintf(stderr,"Starting Gateway Listener \n");
+    fprintf(stderr,"[%s] - Starting Gateway Listener \n", timestamp());
 
     void *subscriber = zsocket_new (ctx, ZMQ_XSUB);
     int subscriberSocketResult = zsocket_bind (subscriber, "%s", subscriberAddress);
@@ -62,7 +192,32 @@ start_gateway_listener(zctx_t *ctx, char *subscriberAddress, char *publisherAddr
     int publisherBindResult = zsocket_bind (publisher, "%s", publisherAddress);
     assert( publisherBindResult >= 0 );
 
-    fprintf(stderr, "Starting XPUB->XSUB Proxy [%s] -> [%s] \n", subscriberAddress, publisherAddress);
+    fprintf(stderr, "[%s] - Starting XPUB->XSUB Proxy [%s] -> [%s] \n", timestamp(), subscriberAddress, publisherAddress);
     zproxy_t *xpub_xsub_thread = zproxy_new(ctx, subscriber, publisher);
+    assert( xpub_xsub_thread );
+
+    if(!debugFlag) {
+        return;
+    }
+
+    int result;
+
+    fprintf(stderr, "[%s] - Creating socket monitor for %s using %s\n", timestamp(), publisherAddress, DEFAULT_INPROC_XPUB_MONITOR_ENDPOINT);
+    result = zmq_socket_monitor(publisher, DEFAULT_INPROC_XPUB_MONITOR_ENDPOINT, ZMQ_EVENT_ALL);
+    assert(result == 0);
+
+    fprintf(stderr, "[%s] - Creating socket monitor for %s using %s\n", timestamp(), subscriberAddress, DEFAULT_INPROC_XSUB_MONITOR_ENDPOINT);
+    result = zmq_socket_monitor(subscriber, DEFAULT_INPROC_XSUB_MONITOR_ENDPOINT, ZMQ_EVENT_ALL);
+    assert(result == 0);
+
+    pthread_t thread;
+
+    fprintf(stderr, "[%s] - Creating thread for %s socket monitor\n", timestamp(), publisherAddress);
+    result = pthread_create(&thread, NULL, monitor_xpub_socket, ctx);
+    assert (result == 0);
+
+    fprintf(stderr, "[%s] - Creating thread for %s socket monitor\n", timestamp(), subscriberAddress);
+    result = pthread_create(&thread, NULL, monitor_xsub_socket, ctx);
+    assert (result == 0);
 }
 

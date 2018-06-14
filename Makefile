@@ -21,17 +21,17 @@ process-resources:
 	mkdir -p $(BUILD_DIR)/classes
 
 install: process-resources
-	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o
-	gcc $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o src/api-gateway-zmq-adaptor.c -o $(BUILD_DIR)/api-gateway-zmq-adaptor
+	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o -lpthread
+	gcc $(BUILD_DIR)/classes/GwZmqAdaptor.o src/api-gateway-zmq-adaptor.c -o $(BUILD_DIR)/api-gateway-zmq-adaptor -lpthread  $(LIBS)
 	cp $(BUILD_DIR)/api-gateway-zmq-adaptor $(PREFIX)/api-gateway-zmq-adaptor
 
 run:
 	$(PREFIX)/api-gateway-zmq-adaptor
 
 test: process-resources
-	gcc -c tests/test_published_messages.c -o $(BUILD_DIR)/test_classes/test_published_messages.o
-	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o
-	gcc  -lcheck $(LIBS) $(BUILD_DIR)/classes/GwZmqAdaptor.o  $(BUILD_DIR)/test_classes/test_published_messages.o -o $(BUILD_DIR)/check_test_runner
+	gcc -c tests/test_published_messages.c -o $(BUILD_DIR)/test_classes/test_published_messages.o -Wall -Werror
+	gcc -c src/GwZmqAdaptor.c -o $(BUILD_DIR)/classes/GwZmqAdaptor.o -Wall -Werror
+	gcc $(BUILD_DIR)/classes/GwZmqAdaptor.o  $(BUILD_DIR)/test_classes/test_published_messages.o -o $(BUILD_DIR)/check_test_runner -lcheck $(LIBS) -Wall -Werror
 	$(BUILD_DIR)/check_test_runner
 
 test-cpp : all

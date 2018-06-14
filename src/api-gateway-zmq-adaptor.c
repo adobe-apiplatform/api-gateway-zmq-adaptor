@@ -217,6 +217,9 @@ listener_thread (void *args, zctx_t *ctx, void *pipe)
 */
 int main (int argc, char *argv[])
 {
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
+
     int major, minor, patch, lmajor, lminor, lpatch;
     zmq_version (&major, &minor, &patch);
     zsys_version (&lmajor, &lminor, &lpatch);
@@ -319,7 +322,7 @@ int main (int argc, char *argv[])
     // ---------------------------------------
     //
 
-    start_gateway_listener(ctx, subscriberAddress, publisherAddress);
+    start_gateway_listener(ctx, subscriberAddress, publisherAddress, debugFlag);
 
     if ( testFlag == 1 ) {
         zthread_fork (ctx, publisher_thread, subscriberAddress);

@@ -43,10 +43,11 @@ test utility methods
 static void
 mock_gateway_publisher_thread (void *args, zctx_t *ctx, void *pipe)
 {
-    printf("Starting Gateway publisher thread [%s] ... \n", args);
+    printf("Starting Gateway publisher thread [%s] ... \n", (char*)args);
 
     void *publisher = zsocket_new (ctx, ZMQ_PUB);
-    int socket_bound = zsocket_connect (publisher, "%s", args);
+    int socket_bound = zsocket_connect (publisher, "%s", (char*)args);
+    assert( socket_bound == 0 );
 
     char string [20];
     int send_response = -100;
@@ -81,11 +82,12 @@ int messages_received_counter = 0;
 static void
 mock_subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 {
-    printf("Starting Debug subscriber thread [%s] ... \n", args);
+    printf("Starting Test Debug subscriber thread [%s] ... \n", (char*)args);
     messages_received_counter = 0;
 
     void *subscriber = zsocket_new (ctx, ZMQ_SUB);
-    zsocket_connect (subscriber, "%s", args);
+    assert(subscriber);
+    zsocket_connect (subscriber, "%s", (char*)args);
     zsocket_set_subscribe (subscriber, "");
 
     while (!zctx_interrupted) {
@@ -107,19 +109,20 @@ mock_subscriber_thread (void *args, zctx_t *ctx, void *pipe)
 START_TEST(test_gateway_listener)
 {
     zctx_t *ctx = gw_zmq_init();
+    zctx_interrupted = false;
     ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
+    char *publisherAddress = "tcp://127.0.0.1:6001";
+    char *subscriberAddress = "ipc:///tmp/nginx_queue_listen";
 
-    start_gateway_listener(ctx, "ipc:///tmp/nginx_queue_listen", "tcp://127.0.0.1:6001");
+    start_gateway_listener(ctx, subscriberAddress, publisherAddress, 0);
 
     // simulate a consumer
-    char *publisherAddress = "tcp://127.0.0.1:6001";
     void *pipe2 = zthread_fork (ctx, mock_subscriber_thread, publisherAddress);
     ck_assert_msg(pipe2 != NULL, "Subscriber Thread should have been created. ");
 
     zclock_sleep (100);
 
     // simulate gateway
-    char *subscriberAddress = "ipc:///tmp/nginx_queue_listen";
     void *pipe = zthread_fork (ctx, mock_gateway_publisher_thread, subscriberAddress);
     ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
 
@@ -141,20 +144,20 @@ END_TEST
 START_TEST(test_gateway_listener_over_abstract_socket)
 {
     zctx_t *ctx = gw_zmq_init();
+    zctx_interrupted = false;
     ck_assert_msg(ctx != NULL, "ZMQ Context can't be null. ");
+    char *subscriberAddress = "ipc://@nginx_queue_listen";
+    char *publisherAddress = "tcp://127.0.0.1:6001";
 
-    start_gateway_listener(ctx, "ipc://@nginx_queue_listen", "tcp://127.0.0.1:6001");
+    start_gateway_listener(ctx, subscriberAddress, publisherAddress, 0);
 
     // simulate a consumer
-    char *publisherAddress = "tcp://127.0.0.1:6001";
     void *pipe2 = zthread_fork (ctx, mock_subscriber_thread, publisherAddress);
     ck_assert_msg(pipe2 != NULL, "Subscriber Thread should have been created. ");
 
     zclock_sleep (100);
 
     // simulate gateway
-//    char *subscriberAddress = "ipc://\\0nginx_queue_listen";
-    char *subscriberAddress = "ipc://@nginx_queue_listen";
     void *pipe = zthread_fork (ctx, mock_gateway_publisher_thread, subscriberAddress);
     ck_assert_msg(pipe != NULL, "Publisher Thread should have been created. ");
 
